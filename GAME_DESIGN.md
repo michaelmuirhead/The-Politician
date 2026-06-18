@@ -732,6 +732,94 @@ This turns omnibus play into a genuine strategic mini-game — coalition-buildin
 risk-bundling, and a cat-and-mouse with the veto pen — that rewards mastery
 without abstracting away the real civics.
 
+### 7.8 The Executive — Appointments, Confirmations & Executive Action
+
+The legislature (§7.6–7.7) is now well-specified; the executive and judiciary
+are its **counterweights**. Executives (mayor / governor / president) act through
+three distinct levers beyond the veto (§7.6):
+
+**Appointments & confirmations.** The executive **nominates**; an upper body
+**confirms** (the `confirmation` ProposalType, §7.5): U.S. Senate for federal
+posts, the state senate for many state posts, council for some city posts. The
+pipeline is: **nominate → committee hearing → confirmation vote** (subject to the
+chamber's threshold; historically the filibuster applied to nominations until
+"nuclear-option" carve-outs — modeled as a per-body data flag). Confirmed
+appointees become **actors** who buff governing effectiveness (§7.1), staff
+agencies, and — critically — **fill the courts** (§7.9). Appointments outlast the
+term that made them, so they are a prime **dynasty-scale** lever.
+
+**Executive action (and its limits).** An executive order/directive is **fast**:
+it takes effect **without the legislature**. That speed is paid for with hard
+limits, which are what keep it from trivializing the legislative game:
+
+| Executive action | Legislation |
+|---|---|
+| Acts only **within delegated/existing authority** — cannot make new law, appropriate funds, or exceed statute/constitution | Can create new law & spending |
+| Effects are **weaker / time-boxed** | Durable |
+| **Rescindable by the next executive** in one stroke | Survives administrations |
+| Must **cite an authority source**; high exposure to **legal challenge** (§7.9) | Harder to strike once passed |
+| Can be **overridden by contrary legislation** or **defunded** by the legislature | — |
+
+So the EO is a **risk/reward** tool: move now and alone, but accept fragility,
+reversal, and the courtroom. Other executive powers slot in by tier as data —
+**pardons**, **calling special sessions**, **commander-in-chief / National Guard**
+(governor/president), executive agreements.
+
+### 7.9 The Judiciary — Courts as a Check
+
+Courts are the **slow, persistent** counterweight and the enforcement mechanism
+for preemption (§7.5) and constitutional limits. They exist per tier — municipal
+/ state courts up to a **state supreme court**; federal **district → circuit →
+Supreme Court** — each with a **composition** (judges carrying an ideological
+lean) and a **selection method**: *appointed* (federal, lifetime tenure),
+*elected* (many state benches), or *merit/retention*.
+
+**Judicial review.** Any law (§7.5) or executive action (§7.8) can be **challenged**
+by a party with standing — a rival officeholder, an interest group, or another
+tier objecting to encroachment. The court rules on validity:
+
+```
+P(struck down) = f(
+    aggressiveness,        // how far the law/EO stretches authority (preempted? novel?)
+    courtLean − lawLean,   // ideological distance between the bench and the measure
+    draftingQuality        // sponsor/executive Intelligence + legal staff (§4.1) → resilience
+)
+```
+
+- A law flagged **preempted** (exceeds home-rule / conflicts with a higher tier,
+  §7.5) faces a **high** strike probability — this is *how* preemption is
+  enforced in play, not just declared.
+- A struck measure is **voided** (its effects reversed), with reputation fallout
+  for whoever overreached (and a `notoriety`/`integrity` swing either way,
+  depending on the politics).
+- **Drafting matters:** a smart, well-staffed sponsor writes laws that **survive**
+  review — rewarding the Intelligence stat and legal appointees.
+
+**Shaping the bench.** Because judges are appointed/elected and **outlast**
+administrations, building a favorable judiciary is a deliberate **multi-term /
+dynasty** project: stack the courts over a career and your aggressive agenda
+survives; inherit a hostile bench and even moderate laws get struck. Courts are
+where the legislative and executive branches' ambitions meet a hard, durable
+limit.
+
+### 7.10 Checks & balances (the loop)
+
+The three branches now form a closed loop at **every tier**, with federalism
+threaded through (§7.5):
+
+- **Legislature** passes law, controls the purse, **confirms** appointees, can
+  **override** vetoes, and can **impeach/remove** executives and judges
+  (the legislature's check on the other branches — tied to scandal/`notoriety`).
+- **Executive** **vetoes** law, **appoints** officials & judges, and acts via
+  **executive order** within limits.
+- **Judiciary** **strikes down** laws and orders that are preempted or exceed
+  authority — and is itself shaped by appointment/election and bounded by
+  amendment.
+
+Whichever branch the player occupies, the others push back; climbing tiers means
+inheriting — and contesting — counterweights you don't control. This is what
+makes the "earnest civics sim" honest rather than a power fantasy.
+
 ---
 
 ## 8. Progression — Between Terms & Across Tiers
@@ -811,6 +899,8 @@ the-politician/
 │  │  ├─ actions/            # campaign actions + effect operators
 │  │  ├─ powers/             # governing powers + effect operators
 │  │  ├─ legislature/        # chambers, committees, pipeline, passage & veto-override math, omnibus
+│  │  ├─ executive/          # appointments, confirmations, executive actions + limits
+│  │  ├─ judiciary/          # courts, bench composition, judicial review & legal challenges
 │  │  ├─ events/             # event pool + resolution (incl. health/mortality)
 │  │  ├─ career/             # lifespan, aging/mortality, progression, eligibility, scoring
 │  │  ├─ dynasty/            # lineage, succession, heir/protégé generation, legacy
@@ -978,6 +1068,45 @@ interface VetoRule {
   pocketVeto: boolean;
 }
 
+// ---- Executive (§7.8) ----
+type AppointmentStatus = "nominated" | "confirmed" | "rejected" | "withdrawn";
+
+interface Appointment {
+  id: string; office: OfficeId;          // the post being filled (incl. judgeships)
+  nominee: string;                       // CharacterId
+  confirmBody?: ChamberId;               // upper chamber that confirms (undefined = no confirmation)
+  status: AppointmentStatus;
+}
+
+interface ExecutiveAction {              // executive order / directive
+  id: string; title: string;
+  tier: TierId; domain: AuthorityDomain; // gated like any power (§7.4)
+  authoritySource: string;               // statute/constitution it relies on (must exist)
+  reversible: true;                      // a successor executive can rescind
+  durable: false;                        // time-boxed / weaker than legislation
+  effects: Effect[];
+}
+
+// ---- Judiciary (§7.9) ----
+type CourtLevel = "trial" | "appellate" | "supreme";
+type SelectionMethod = "appointed" | "elected" | "merit";
+
+interface Judge { id: string; name: string; lean: number; /* −1…+1 */ lifetime: boolean; }
+
+interface Court {
+  id: string; name: string; tier: TierId; level: CourtLevel;
+  selection: SelectionMethod;
+  bench: Judge[];                        // composition → aggregate courtLean
+}
+
+interface LegalChallenge {
+  id: string;
+  target: { kind: "law" | "executive_action"; id: string };
+  challenger: ActorId;                   // rival office / interest group / other tier
+  court: string;                         // CourtId
+  outcome?: "upheld" | "struck_down";
+}
+
 interface Office {
   id: OfficeId; name: string; tier: TierId;
   jurisdictionId: UnitId;               // the node in the nested world this seat governs
@@ -1001,6 +1130,7 @@ interface Scenario {                    // a complete playable world
   issues: Issue[]; demographics: Demographic[];
   units: Unit[]; offices: Office[];
   bodies: LegislativeBody[];            // chambers/committees/veto rules per jurisdiction
+  courts: Court[];                      // the judiciary per tier (§7.9)
   proposals: Proposal[];               // the catalog (§7.5) available in this world
   candidates: Character[];
   world: WorldState;
@@ -1048,6 +1178,9 @@ refined in resolution over the milestones.
 - [ ] Heuristic opponent + governing rivals/factions AI.
 - [ ] **Council legislative pipeline**: committee referral & chair gatekeeping,
       floor vote (passage math), mayor veto + 2/3 override.
+- [ ] **Executive & courts (city)**: mayoral appointments, executive directives
+      with limits, and a municipal court that can strike preempted ordinances
+      (§7.8–7.9) — the city's checks-and-balances loop.
 - [ ] Event/news system + starter pool (campaign + governing events), earnest tone.
 - [ ] **Operative/staff + endorsement economy** on Political Capital (§4.2):
       scaling hire costs, experience discount.
@@ -1078,6 +1211,9 @@ refined in resolution over the milestones.
       Nebraska unicameral special case.
 - [ ] **Omnibus & riders** (§7.7): bundling, logrolling for votes, the weight
       penalty, single-subject limits per state, line-item-veto duel.
+- [ ] **Full executive & judiciary** (§7.8–7.10): Senate confirmations
+      (nuclear-option flag), state/federal court hierarchies, judicial review at
+      scale, bench-stacking as a dynasty lever, impeachment/removal.
 - [ ] Cross-tier **Progression**: eligibility, seeking higher office, the
       underdog reset, failed-jump consequences, inheriting predecessors' world.
 - [ ] Validate all three single-tier games and the full climb.
