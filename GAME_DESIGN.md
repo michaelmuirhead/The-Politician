@@ -922,16 +922,142 @@ genuine dilemmas and consequences rather than caricature.
 
 ---
 
-## 10. Opponent & World AI
+## 10. AI Politicians — Act, React & Proact
 
-1. **v1 — Heuristic candidates:** score actions by expected gain per AP using
-   the sim as a lookahead; target the closest worthwhile units.
-2. **v1 — Governing rivals/factions:** other officeholders run the world model
-   too; factions push agendas you must deal with.
-3. **v2 — Personalities:** AI weights behavior by traits.
-4. **v3 (stretch) — Shallow lookahead** over pruned actions.
+Because **the whole world simulates** and **AI runs every office the player
+doesn't hold** (§0, §7.2), AI is not a single "opponent" — it is the entire
+living political class: rivals, allies, party leaders, faction bosses, the
+executive above you, committee chairs, judges, and challengers, across the full
+nation. They are **first-class citizens of the same engine**: an AI politician is
+just a `Character` (§4) whose moves are chosen by a policy over the **exact same**
+command space the player uses — campaign actions (§6), governing powers and
+proposals (§7), appointments, vetoes, legal challenges, ballot measures. Nothing
+the AI does is special-cased; nothing bypasses the authority gate (§7.4).
 
-Because the sim is pure, AI evaluates moves by calling it directly.
+### 10.1 Principles
+
+- **Symmetry.** AI plays by the player's rules and tools — no hidden actions, no
+  free resources (difficulty tunes *competence*, not *cheating*).
+- **Explainability.** Like every poll movement (§5.4), an AI choice is traceable
+  to its goals and the sim's expected outcome — surfaced as news/motive so the
+  player can read the board.
+- **Determinism.** AI decides via the **pure sim as lookahead** (seeded RNG), so
+  games are reproducible and balance is testable headlessly.
+- **Tiered fidelity (§10.6).** Full nation ⇒ deep AI only where it matters;
+  everywhere else, cheap statistical behavior.
+
+### 10.2 What drives an AI politician (motivation)
+
+Each AI scores possible moves against a weighted **objective function**; the
+weights come from its `Character` — `stats`, `traits`, `party`, `positions`, and
+ambition — so a `firebrand reformer` and a `machine_boss` pursue the same office
+very differently:
+
+```
+utility(AI) = w_survive  × reElectionOdds        // approval & support in own units (§5)
+            + w_agenda   × policyProgress         // moving the world toward its positions
+            + w_climb    × ambitionProgress       // name recognition, eligibility for next seat (§8)
+            + w_party    × coalitionHealth         // standing with party/factions/donors
+            + w_war       × resources              // money + political capital banked
+            + w_ego      × notoriety               // firebrards value spotlight even when costly
+```
+
+`w_*` weights are derived from traits (a `wonk` over-weights `agenda`; an
+`outsider` discounts `party`; the ambitious over-weight `climb`). This single
+function powers act, react, and proact below.
+
+### 10.3 ACT — autonomous, goal-seeking behavior
+
+Every AP/turn an AI holds, it pursues its objective whether or not the player is
+involved — the world moves on its own:
+
+- **In Campaign Mode:** raise money, target persuadable/turnout units with the
+  best expected-support-per-AP action (§6), stake positions, bank endorsements
+  and operatives (§4.2), build field offices where the map is close.
+- **In Govern Mode:** propose and shepherd legislation in its domains (§7.5),
+  set budgets toward its priorities, make appointments, spend capital on
+  deal-making — building a *record* that feeds its own re-election.
+- **Greedy + budgeted:** enumerate legal commands → score each by sim lookahead →
+  take the best until AP/capital runs out (shallow multi-step lookahead at higher
+  difficulty, §10.8).
+
+### 10.4 REACT — responding to the player & the world
+
+AI continuously reads the board and answers moves:
+
+- **To your campaign:** counter-ads and rapid response, GOTV where you surge,
+  pivot spending to *its* most threatened units, exploit any unit you neglect.
+- **To your legislation:** vote per the passage math (§7.6) by ideology +
+  relationship + `dealValue`; an AI **committee chair may gatekeep it to death**;
+  an AI **executive may veto**; an AI rival or another tier may bring a **legal
+  challenge** (§7.9) against an aggressive/preempted law.
+- **To scandal & weakness:** the opposition **pounces** — attack ads, a **recall
+  or impeachment push** (§7.11–7.12) when your `integrity`/approval cracks; wary
+  allies distance themselves.
+- **To world events (§9):** a recession or disaster reshuffles everyone's
+  priorities; incumbents (AI and player) get judged, challengers exploit it.
+- **Reciprocity:** AI repays betrayal and loyalty (§10.7) — cross it and it whips
+  against you next session; deal fairly and it becomes a reliable vote.
+
+### 10.5 PROACT — anticipating and scheming ahead
+
+The strongest AI doesn't just respond — it positions for a board that doesn't
+exist yet:
+
+- **Targets open/weak seats** before they're contested: recruits, fundraises
+  early, and stakes ground for a future run.
+- **Blocks your climb:** if it reads your ambition (your record + name
+  recognition signal it), it backs a stronger rival against you, denies you
+  committee assignments, or pushes a **redistricting** (§7.5 `*.elections`) that
+  reshapes your base.
+- **Banks for the long game:** war chests, endorsements, and especially the
+  **courts** — appointing young judges whose lean outlasts administrations (§7.9)
+  — and grooms its own **dynasty/successors** (§4).
+- **Party leadership AI coordinates** across races it doesn't personally hold:
+  recruits candidates, steers party money to competitive contests, enforces
+  **whip discipline**, and punishes defectors — an above-the-board strategic actor
+  the player must negotiate with to rise.
+
+### 10.6 Scale — focus vs. ambient AI (full nation)
+
+Running deep AI for every U.S. office every turn is neither affordable nor
+necessary, so AI runs at **two fidelities**, with promotion between them:
+
+| | **Focus AI** | **Ambient AI** |
+|---|---|---|
+| Who | Politicians in the player's orbit: same jurisdiction, the player's chamber, declared rivals, the executive above, relevant chairs/judges | Distant offices across the nation |
+| How | Full per-turn objective-function decisions over the real command space | Cheap statistical resolution — elections via fundamentals + leaning (§5.5) + noise; governance via aggregate trends that still roll up the nested world (§7.2) |
+| Promotion | — | A seat **promotes to Focus** when it enters the player's orbit (you climb toward it, or its holder targets you), so a distant rival becomes fully simulated exactly when it starts to matter |
+
+This keeps the country alive and self-consistent while spending compute only
+where the player can feel it.
+
+### 10.7 Memory, relationships & grudges
+
+AI is not goldfish-brained. Every interaction updates the `relationships` map and
+`history` (§4): favors traded, betrayals, attacks, broken deals. Consequences
+**persist across terms and tiers**, and a portion **passes to successors** via
+`inheritedRelationships` (§4) — the rival you crushed as mayor remembers it when
+you reach the statehouse, and so does their protégé. This makes reputation and
+coalition-building a long-game, not a per-election reset.
+
+### 10.8 Implementation & roadmap
+
+Because the sim is **pure**, AI evaluates any move by calling it directly and
+reading the projected state — no separate model to keep in sync.
+
+1. **v1 (M1–M2) — Heuristic actor:** greedy objective-function scoring over legal
+   commands via one-step sim lookahead; trait-weighted goals; covers campaign +
+   the city legislative/exec/court loop. Ambient AI = statistical elections.
+2. **v2 (M3–M4) — Personalities & scheming:** full proact (recruitment, climb-
+   blocking, bench-stacking, party coordination), memory/grudges, focus↔ambient
+   promotion across tiers.
+3. **v3 (stretch) — Shallow lookahead** over pruned action sets for sharper play.
+
+**Difficulty** scales AI **competence, not cheating**: lookahead depth, resource
+efficiency, decision noise/error rate, and aggressiveness — wired to the
+difficulty surface (§14). All AI decisions are unit-/golden-master-testable
+because they are deterministic functions of state.
 
 ---
 
@@ -961,7 +1087,7 @@ the-politician/
 │  │  ├─ career/             # lifespan, aging/mortality, progression, eligibility, scoring
 │  │  ├─ dynasty/            # lineage, succession, heir/protégé generation, legacy
 │  │  ├─ persistence/        # save/load of the long-running world & lineage state
-│  │  ├─ ai/                 # candidate + governing AI for all unheld offices
+│  │  ├─ ai/                 # objective-function actor (act/react/proact); focus vs ambient fidelity
 │  │  ├─ engine.ts           # nested state machine; pure reducer (state, command) → state
 │  │  └─ rng.ts              # seeded RNG for determinism
 │  ├─ cli/                   # terminal harness over core — first playable
