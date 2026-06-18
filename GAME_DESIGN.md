@@ -334,6 +334,9 @@ seat's **powers** over periodic turns; the **living world** responds.
 | **Handle Crisis** | Respond to events (disaster, scandal, downturn) | Time-pressured choices with lasting world + reputation effects |
 | **Deal-making** | Trade votes/favors with factions & rivals | Spends political capital & relationships to pass agendas |
 
+The specific bills/proposals each seat may bring under these powers are
+enumerated in the **Proposal & Bill Catalog (§7.5)**, gated by tier and domain.
+
 ### 7.2 The living world simulation
 
 There is **one persistent, nested world model** for the whole United States,
@@ -407,6 +410,97 @@ representative's power is to **cast one vote / sponsor / filibuster**, while the
 bill's passage is resolved at the body's level. This keeps separation of powers
 and federalism honest at every tier.
 
+### 7.5 Proposal & Bill Catalog (what can be brought, by tier)
+
+The authority gate (§7.4) defines *who may act*; this catalog defines *what they
+may bring for consideration*. Every entry is a gated **proposal** carrying a
+`tier`, a `ProposalType` (the mechanism), and an `AuthorityDomain` (the subject
+matter) — so a proposal can only be introduced by an office whose `powers`
+include that domain, and only over the jurisdiction it governs. The lists below
+are the **seed catalog**; it is data-driven and built to expand (see "Expansion"
+at the end) without engine changes.
+
+**Proposal *types* (the mechanism, shared across tiers):**
+
+| Type | What it is | Typical mover → decider |
+|---|---|---|
+| **Ordinance / Statute / Act** | Binding law (city ordinance · state statute · federal act) | Legislator sponsors → legislative body votes → executive signs/vetoes |
+| **Appropriation / Budget** | Spending & revenue allocation | Executive proposes → legislature amends/adopts |
+| **Resolution** | Non-binding stance, procedural, or memorializing | Legislator → body votes |
+| **Confirmation** | Approve an appointment (judge, cabinet, commissioner) | Executive nominates → upper body confirms |
+| **Executive action** | Order/directive within delegated authority | Executive acts unilaterally (subject to courts/override) |
+| **Ballot measure** | Referendum/initiative put to voters | Body refers *or* citizens petition → electorate decides |
+| **Amendment** | Charter / state-constitution / U.S. Constitution change | Supermajority and/or voter approval |
+| **Treaty / Compact** | Treaty (federal) · interstate compact (state) | Executive negotiates → upper body ratifies |
+
+**City / municipal tier** — domains under `local.*`:
+
+| Domain | Example proposals |
+|---|---|
+| `local.zoning` | Rezoning, variances, density/upzoning, comprehensive plan, historic districts |
+| `local.tax` | Property-tax rate (within state caps), local sales/lodging surcharges, permit & license fees |
+| `local.budget` | Annual city budget, capital improvement plan, municipal bond issuance (often → ballot) |
+| `local.development` | Approve projects, TIF districts, redevelopment, affordable-housing requirements |
+| `local.public_safety` | Policing policy, noise/curfew/nuisance ordinances, fire code |
+| `local.services` | Sanitation, parks & rec, libraries, water/sewer utility rules |
+| `local.transit` | Local roads, parking, bus/streetcar service, bike infrastructure |
+| `local.governance` | Charter amendments, ward redistricting, ethics/lobbying rules |
+
+**State tier** — domains under `state.*`:
+
+| Domain | Example proposals |
+|---|---|
+| `state.budget` | Biennial/annual budget, appropriations, state bonds |
+| `state.tax` | Income/sales/excise/corporate tax rates and credits |
+| `state.education` | K-12 funding & standards, university system, school choice |
+| `state.health` | Medicaid policy, public health, licensing of providers |
+| `state.justice` | Penal code, sentencing, state police, corrections, courts |
+| `state.transportation` | Highways, DOT programs, statewide transit |
+| `state.labor` | State minimum wage, workplace & licensing rules |
+| `state.environment` | State lands, water rights, emissions, energy policy |
+| `state.commerce` | Business regulation, professional licensing, alcohol/gaming |
+| `state.elections` | Election law, congressional & legislative redistricting |
+| `state.local_authority` | Grant/preempt municipal powers (home-rule scope) |
+| `state.constitution` | Refer state-constitutional amendments to voters |
+
+**Federal tier** — domains under `federal.*`:
+
+| Domain | Example proposals |
+|---|---|
+| `federal.budget` | Federal budget, appropriations bills, debt-ceiling |
+| `federal.tax` | Income/corporate tax, tariffs |
+| `federal.foreign_policy` | Treaties, sanctions/**embargoes**, diplomatic recognition |
+| `federal.defense` | Defense authorization, war powers, armed-forces policy |
+| `federal.immigration` | Naturalization, visas, border policy |
+| `federal.commerce` | Interstate & foreign commerce regulation, trade agreements |
+| `federal.social_insurance` | Social Security, Medicare |
+| `federal.civil_rights` | Federal civil-rights & voting law |
+| `federal.judiciary` | Federal court structure; **confirmations** of judges/justices |
+| `federal.executive` | Executive orders, cabinet/agency appointments & confirmations |
+| `federal.environment` | National environmental & energy law, federal lands |
+| `federal.constitution` | Propose U.S. constitutional amendments |
+
+**Introduction rights & passage.** Who may *introduce* depends on the seat:
+legislators **sponsor** ordinances/statutes/acts and **cast votes**; executives
+(mayor/governor/president) **propose budgets**, **sign or veto**, issue
+**executive actions**, and **nominate** for confirmation. Passage rules vary by
+type — simple majority, supermajority (overrides, amendments), executive
+signature, or voter approval (ballot measures) — and are resolved at the
+*body's* level, never unilaterally for collective proposals (§7.4).
+
+**Cross-tier preemption.** Lower tiers act only within authority the tier above
+grants: a city ordinance that exceeds **state** home-rule authority, or a state
+statute that conflicts with valid **federal** law, is flagged **preempted** and
+fails — the same gate, applied upward. This is what stops the "council embargoes
+a nation / Congress sets a city tax" class of moves at the *proposal* layer too,
+not just the action layer.
+
+**Expansion.** The catalog is intentionally a seed. New proposals are added as
+data by naming a `(tier, type, domain)` triple and its effects; new domains
+extend the `local.*` / `state.* `/ `federal.*` namespaces; whole new tiers
+(e.g. county, school board, supranational) slot in by declaring their domain
+namespace and offices. The engine, gate, and effect system stay unchanged.
+
 ---
 
 ## 8. Progression — Between Terms & Across Tiers
@@ -479,6 +573,7 @@ the-politician/
 │  │  ├─ data/               # content: tiers, real-US world, issues, demographics
 │  │  │  ├─ tiers/           # city / state / federal definitions
 │  │  │  ├─ usa/             # real US data: nested cities/counties/states, parties, issues
+│  │  │  ├─ proposals/       # bill/proposal catalog by tier & domain (§7.5), expandable
 │  │  │  └─ scenarios/       # complete playable setups (entry office/tier)
 │  │  ├─ sim/                # support, turnout, pressure decay, election tally
 │  │  ├─ world/              # ONE persistent nested world model + record effects
@@ -558,6 +653,33 @@ interface Power {
   reach: "own" | "descendants";         // acts on the office's own node, or down the hierarchy
   collective?: boolean;                 // true = participation in a body's vote, not unilateral
   effects: Effect[];                    // routed through the shared effect system
+}
+
+type ProposalType =
+  | "ordinance" | "statute" | "act"     // binding law (city / state / federal)
+  | "appropriation"                     // budget / spending
+  | "resolution"                        // non-binding / procedural
+  | "confirmation"                      // approve an appointment
+  | "executive_action"                  // order/directive within delegated authority
+  | "ballot_measure"                    // referendum / initiative → voters
+  | "amendment"                         // charter / state-const / U.S. Const
+  | "treaty_or_compact";                // treaty (federal) / interstate compact (state)
+
+type PassageRule =
+  | "majority" | "supermajority"
+  | "executive_signature"               // legislature passes, executive signs/vetoes
+  | "voter_approval";                   // decided at the ballot
+
+interface Proposal {                    // a catalog entry (§7.5); gated like Power
+  id: string; title: string;
+  tier: TierId;
+  type: ProposalType;
+  domain: AuthorityDomain;              // subject matter — must be in the mover's office.powers
+  reach: "own" | "descendants";
+  introduceRights: OfficeId[];          // which seats may sponsor/propose it
+  decisionBody?: OfficeId;              // collective body that votes (if any)
+  passage: PassageRule;
+  effects: Effect[];                    // applied on passage, through the shared effect system
 }
 
 interface Office {
