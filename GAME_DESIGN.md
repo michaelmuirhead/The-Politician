@@ -184,13 +184,17 @@ interface Character {
   health: number;              // declines with age/stress; drives mortality risk
   alive: boolean;
   party: PartyId;
-  stats: CandidateStats;       // charisma, intelligence, stamina, fundraising, composure, integrity
-  traits: TraitId[];           // war_hero, outsider, wonk, firebrand, machine_boss, reformer…
+  stats: CandidateStats;       // 8 stats, §4.1
+  experience: number;          // derived from offices/terms; discounts staff, gates eligibility
+  traits: TraitId[];           // background + acquired, §4.1
   positions: Record<IssueId, number>;
   reputation: Reputation;      // see below
   history: OfficeRecord[];     // every office sought/held + what you did with it
   relationships: Record<ActorId, number>; // donors, factions, party bosses, rivals, press
-  warChest: number;
+  warChest: number;            // 💰 Money — ads, travel
+  politicalCapital: number;    // 🏛️ Capital — endorsements, operatives, deal-making (§4.2)
+  staff: OperativeId[];        // hired operatives/staff (cost scales per hire)
+  endorsements: EndorsementId[];
   lineageId: string;           // the dynasty this character belongs to
   successors: string[];        // heirs/protégés eligible to carry the lineage on
 }
@@ -236,6 +240,83 @@ interface Reputation {
 - **Persistent consequences.** Your record, relationships, and the state of the
   world carry across terms and tiers. The budget you blew as mayor is still
   blown when your successor inherits it; the rival you crushed remembers it.
+
+### 4.1 Stats & Traits (informed by *The Political Machine*)
+
+Stardock's *The Political Machine* rates candidates **1–10** on a point-buy set
+of characteristics — *Stamina, Charisma, Money, Fundraising, Intelligence,
+Appearance, Credibility, Experience, Media Bias, Minority Appeal, Religious
+beliefs* — each tuned to its campaign loop (e.g. **Stamina = moves per turn**,
+**Charisma = speech/ad effect**, **Intelligence = interview performance**,
+**Experience = cheaper operatives**). We borrow the **clean 1–10 point-buy feel**
+and several mechanics, but adapt for our key difference: TPM is a single
+presidential *campaign*, while ours is a **career + governing + dynasty** game,
+so **every stat must do work in *both* Campaign and Govern modes** and over a
+lifetime.
+
+**Stats (1–10, point-buy at creation; drift up with experience and down with age).**
+
+| Stat | Campaign role | Govern role |
+|---|---|---|
+| **Charisma** | Speech/ad effectiveness, rally turnout (TPM: charisma) | Bully pulpit — rally public behind your agenda |
+| **Intelligence** | Debates, interviews, rapid response (TPM: intelligence) | Policy quality — better effect per proposal; navigate committees |
+| **Stamina** | **Action points per turn** (TPM: stamina) — the action economy | How much you can push each governing quarter; **declines with age/health** (§4 mortality) |
+| **Fundraising** | Money from donors/fundraisers (TPM: fundraising) | Fund allies & re-election war chest |
+| **Composure** | Resist gaffes; debate steadiness; scandal response | **Crisis handling** (§7.1 Handle Crisis) |
+| **Integrity** | Credibility of promises; resistance to attacks (TPM: credibility) | Trust capital — but **high integrity makes dirty logrolling harder** (§7.7), a real trade-off |
+| **Media Savvy** *(new)* | Earned media, press relations, ad amplification (TPM: media bias + appearance) | Frame your record; shape the news cycle |
+| **Negotiation** *(new)* | Backroom party support; operative effectiveness | **Whipping votes & deal-making** (§7.6 passage math, §7.7 logrolling) — the "machine" stat, paired against Integrity |
+
+This folds TPM's *Appearance/Media Bias* into **Media Savvy** and its
+*Credibility* into **Integrity**, and adds **Negotiation** to power our
+governing/legislative layer (which TPM lacks entirely).
+
+**Experience is earned, not bought.** Where TPM makes Experience a point-buy
+stat (cheaper operatives), our career *is* the experience: a derived value that
+accumulates from offices held and terms served, discounting staff, unlocking
+higher-tier eligibility (§8), and nudging baseline competence. Fits the
+generational arc better than a static slider.
+
+**What we deliberately *don't* copy: identity sliders.** TPM's **Minority Appeal**
+and **Religious beliefs** are single-number appeal stats. We **reject** these as
+raw sliders — both for tone (our "earnest, non-editorializing" decision) and
+because we already model group appeal far more richly: `identityFit(group,
+candidate)` (§5.2) derives appeal from the candidate's **background, traits, and
+issue positions** interacting with each unit's **demographic mix**. A Black
+Baptist former-prosecutor reformer reads differently to each group *organically*,
+without a reductive "minority = 7" dial.
+
+**Traits** (qualitative, stack on stats — our richer answer to TPM's mostly
+stat-only candidates):
+
+- **Background traits** (chosen at creation): `war_hero`, `business_mogul`,
+  `academic`, `machine_boss`, `outsider`, `reformer`, `celebrity`, `prosecutor`,
+  `union_organizer`, `clergy`… — each grants stat modifiers, demographic
+  affinities, and sometimes a unique action.
+- **Acquired traits** (earned over a career): `scandal_tainted`, `kingmaker`,
+  `fiscal_hawk`, `war_president`, `do_nothing`… — emerge from your record and
+  feed reputation, the AI's read of you (§10), and event eligibility.
+
+### 4.2 Borrowed campaign economy (validated by TPM)
+
+TPM's resource layer maps almost 1:1 onto what we'd sketched — we adopt it
+explicitly:
+
+- **Political Capital (🏛️)** as a currency **distinct from Money (💰)** — TPM's
+  PC vs. campaign funds split. Money buys ads/travel; Capital buys endorsements,
+  operatives, and (in Govern mode) greases deal-making and agenda-pushing.
+  Generated by office, approval, and relationships.
+- **Operatives / campaign staff** — hireable assets whose **cost scales with each
+  hire** and is **discounted by Experience** (TPM exactly): e.g. fundraiser,
+  pollster, field organizer, spin doctor (boost issue rating), fixer (remove a
+  rival operative), smear merchant (cut opponent). A few hinder opponents; most
+  buff you.
+- **Endorsements** — interest groups, unions, papers, and party bosses endorse
+  you for **immediate, deliberate** (non-random) bonuses, bought with Capital +
+  relationship standing.
+
+(*The War Room "operative card market" from recent TPM editions is noted as
+optional flavor, not core.*)
 
 ---
 
@@ -773,6 +854,26 @@ GitHub Pages.
 type IssueId = string; type DemographicId = string;
 type UnitId = string;  type PartyId = string;
 type OfficeId = string; type TierId = "city" | "state" | "federal";
+type TraitId = string; type OperativeId = string; type EndorsementId = string;
+
+interface CandidateStats {              // each 1–10, point-buy at creation (§4.1)
+  charisma: number; intelligence: number; stamina: number; fundraising: number;
+  composure: number; integrity: number; mediaSavvy: number; negotiation: number;
+}
+
+interface Operative {                   // hireable staff; cost scales per hire, discounted by experience
+  id: OperativeId; name: string;
+  role: "fundraiser" | "pollster" | "field" | "spin_doctor" | "fixer" | "smear";
+  baseCost: number;                     // in 🏛️ Political Capital
+  effects: Effect[];
+}
+
+interface Endorsement {                 // deliberate, non-random; bought with capital + standing
+  id: EndorsementId; name: string;      // union, paper, interest group, party boss…
+  cost: number;                         // 🏛️ Political Capital
+  requires?: { relationship?: ActorId; minStanding?: number };
+  effects: Effect[];
+}
 
 interface Issue { id: IssueId; name: string; tiers: TierId[]; }
 
@@ -937,6 +1038,7 @@ refined in resolution over the milestones.
 
 ### M1 — City vertical slice: campaign + govern (CLI)
 - [ ] Nested state machine: Term → Campaign (weekly) → Govern (quarterly) → end-of-term.
+- [ ] **Character creation**: 8-stat 1–10 point-buy + background trait (§4.1).
 - [ ] Campaign Mode loop + first actions (Rally, Ads, Fundraiser, Retail, Position).
 - [ ] Govern Mode loop + first powers (Budget, Ordinance, Development).
 - [ ] Living **city** world model + `recordEffect` feedback into the sim.
@@ -947,6 +1049,8 @@ refined in resolution over the milestones.
 - [ ] **Council legislative pipeline**: committee referral & chair gatekeeping,
       floor vote (passage math), mayor veto + 2/3 override.
 - [ ] Event/news system + starter pool (campaign + governing events), earnest tone.
+- [ ] **Operative/staff + endorsement economy** on Political Capital (§4.2):
+      scaling hire costs, experience discount.
 - [ ] City growth/decay + **leaning drift** (`currentLean` vs `baselineLean`,
       §5.5) across multiple terms.
 - [ ] Balance pass via batch sims; golden-master tests.
