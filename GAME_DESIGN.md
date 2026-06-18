@@ -1,364 +1,465 @@
 # The Politician — Game Design Document
 
-> A turn-based political campaign strategy game. Pick a candidate, work a
-> calendar of weeks until election day, spend limited resources across regions,
-> stake out positions on issues that win some voters and alienate others, react
-> to events, and beat your opponent to a majority of electoral votes.
+> A turn-based political **career life-sim** across three tiers of government —
+> **city, state, and federal**. Create a character and live out their political
+> life: campaign to get elected, then govern and shape a living world. Stay a
+> beloved (or notorious) small-town mayor for your whole career, climb to the
+> statehouse and stop there, or claw your way from a city council seat all the
+> way to the top. How far you rise depends on how good — or how bad — you are.
 
-**Status:** Design draft v0.1
-**Genre:** Turn-based strategy / political management sim
-**Inspirations:** _The Political Machine_ (core loop), _The Campaign Trail /
-President Infinity_ (electoral layer), _Democracy_ (simulation engine),
-plus narrative event systems from other political games.
+**Status:** Design draft v0.2
+**Genre:** Turn-based political career sim (campaign strategy + governing sim)
+**Inspirations:** _The Political Machine_ (campaign loop), _The Campaign Trail /
+President Infinity_ (electoral layer), _Democracy_ (governing simulation),
+life-sim career progression, city-builder world dynamics.
+
+---
+
+## 0. The Vision
+
+The player enters a world and lives one character's political life from entry
+to the end of their career/lifespan. There is no single "right" path:
+
+- **The City Lifer.** Win a council seat or the mayor's office and spend an
+  entire career running the politics of a growing city — managing development,
+  budgets, factions, and crises as the city evolves around you.
+- **The State Climber.** Start in local politics, break through to the
+  statehouse or governorship, and govern at the state level for the rest of
+  your life.
+- **The Ambitious One.** Go from a local race all the way to the top, tier by
+  tier, if you have the skill, luck, and ruthlessness to make each jump.
+
+The game must be **deep enough at every tier** that a player can have a complete,
+satisfying game without ever leaving it. Vertical progression is an *option the
+player earns*, not a track they're forced down.
 
 ---
 
 ## 1. Design Pillars
 
-1. **Every choice has a cost.** Pleasing one demographic angers another. There
-   is no dominant strategy — only trade-offs.
-2. **The map is the board.** Electoral votes, not raw popularity, win the game.
-   Targeting the right regions matters more than running up the score.
-3. **Systems over scripts.** Polling emerges from a transparent simulation of
-   issues × demographics × regions, not from hand-authored outcomes. Players
-   can reason about and exploit the model.
-4. **Reactive drama.** Random events, scandals, and news cycles keep a
-   well-laid plan under constant pressure.
-5. **Readable depth.** Deep enough to reward mastery; legible enough that a
-   new player understands *why* a number moved.
+1. **A life, not a match.** The unit of play is a *career*, spanning many terms
+   and elections over a character's lifespan. Reputation, relationships, and
+   your record persist and compound.
+2. **Campaign, then govern.** Getting elected is half the game; the other half
+   is what you do in office and how the world reacts. Both feed each other.
+3. **Every tier is a full game.** City, state, and federal each offer enough
+   depth to absorb an entire career. Climbing is a choice, not a requirement.
+4. **The world is alive.** Cities grow or decay, economies shift, demographics
+   change — partly on their own, partly because of your decisions. Your record
+   is written in the world you leave behind.
+5. **Every choice has a cost.** Pleasing one demographic angers another; a
+   policy that wins re-election may wreck the budget for your successor.
+6. **Systems over scripts.** Outcomes emerge from a transparent, data-driven
+   simulation, not hand-authored results. Players can reason about and exploit it.
+7. **Readable depth.** Deep enough to reward mastery; legible enough that a new
+   player understands *why* a number moved.
 
 ---
 
-## 2. Core Loop
+## 2. Tiers of Play
 
-```
-START CAMPAIGN
-   │
-   ▼
-┌─────────────────────────────────────────────┐
-│  WEEKLY TURN (repeat until election day)      │
-│                                               │
-│  1. News phase    → events / scandals fire    │
-│  2. Planning      → spend resources on actions│
-│  3. Resolution    → actions apply effects     │
-│  4. Opponent turn → AI does the same          │
-│  5. Polling       → simulation recomputes      │
-│  6. Report        → weekly polling + cash report│
-└─────────────────────────────────────────────┘
-   │
-   ▼
-ELECTION DAY → tally electoral votes → WIN / LOSE
-```
+The three tiers are the same game systems at different **scale** and **scope**.
+Mechanically they share one engine; they differ in data and in the powers a
+seated officeholder wields.
 
-A campaign is a fixed number of weekly turns (default **20 weeks**). Each turn
-the player has a budget of **resources** (below) to spend on **actions** across
-**regions**. The opponent AI runs the same loop. Between turns the simulation
-recomputes regional support.
-
----
-
-## 3. Resources
-
-Resources are the scarcity that forces trade-offs. Each turn:
-
-| Resource | Symbol | Source | Spent on |
+| | **City** | **State** | **Federal** |
 |---|---|---|---|
-| **Action Points (Stamina)** | ⚡ | Fixed per turn, modified by candidate `stamina` stat | Every action costs AP — the core constraint |
-| **Money** | 💰 | Fundraising actions, starting war chest, donor events | Ads, staff, travel, GOTV |
-| **Political Capital** | 🏛️ | Earned by wins/endorsements, spent on risky plays | Flip-flopping on issues, attack ads, calling in favors |
-| **Time** | 🗓️ | The turn counter itself (20 weeks) | The meta-resource: weeks are finite |
+| **Constituency units** | Wards / neighborhoods | Counties / districts | States / districts |
+| **Example offices** | Council member, Mayor | State legislator, Governor | Representative, Senator, President |
+| **Electorate scale** | Thousands | Millions | Tens of millions |
+| **Issue flavor** | Zoning, policing, schools, potholes, local business | Budgets, infrastructure, education, taxes | Economy, foreign policy, healthcare, defense |
+| **Governing powers** | City budget, ordinances, development, services | State budget, statewide programs, appointments | National budget, legislation, executive actions |
+| **"Living world" layer** | City growth (population, economy, districts) | Regional economy & inter-city dynamics | National economy & geopolitics |
+| **Campaign scale** | Small money, retail politics, door-knocking | Bigger money, media, regional targeting | Massive money, national media, electoral map |
 
-Unspent money carries over between turns; AP and (most) political capital do not.
+**Key reuse:** a "constituency unit" is the generalization of the v0.1 *Region*.
+The support simulation (§5) runs identically at every tier — only the units,
+issues, demographics, and electorate sizes change, all of which are **data**.
 
 ---
 
-## 4. The Simulation Model (the "Democracy" layer)
+## 3. The Nested Game Loops
 
-This is the heart of the game and the first thing to build/test. It is a
-deterministic function recomputed each turn.
+Play nests at three levels of time:
 
-### 4.1 Entities
+```
+CAREER  (a character's lifespan)
+  │  choose entry office & tier → live through many terms → retire/lose/age out
+  │
+  ├── TERM  (one elected office, fixed length, e.g. 4 yrs)
+  │     │
+  │     ├── CAMPAIGN MODE  (the run-up to an election)
+  │     │      weekly turns: spend resources, target units, take positions,
+  │     │      react to events  →  election day  →  win/lose
+  │     │
+  │     └── GOVERN MODE  (time in office, if you won)
+  │            periodic turns: enact policy, manage budget, handle crises,
+  │            build your record, shape the living world  →  end of term
+  │
+  └── PROGRESSION  (between terms)
+        re-run for same office? · seek higher office (if eligible)? ·
+        term-limited out? · retire? · the world & your reputation carry forward
+```
 
-- **Issues** — e.g. `economy`, `healthcare`, `immigration`, `climate`,
-  `taxes`, `security`. Each issue has a 1-D **position axis** (−1.0 … +1.0).
-- **Demographic groups** — e.g. `working_class`, `suburban`, `seniors`,
-  `young`, `urban`, `rural`, `business`. Each group has:
-  - a **size** (share of the electorate, varies by region),
-  - an **ideal position** per issue (−1.0 … +1.0),
-  - an **issue salience** weighting (how much each issue matters to them),
-  - a baseline **turnout propensity**.
-- **Regions** — the electoral units (US states by default). Each region has:
-  - **electoral votes** (the prize),
-  - a **demographic mix** (group → share),
-  - a **base partisan lean** (home-field advantage),
-  - current **support split** (candidate A % / B % / undecided %).
-- **Candidates** — see §6. Each holds a **position** per issue and a set of
-  **stats/traits**.
+- **Campaign Mode** is the v0.1 electoral strategy loop (rallies, ads,
+  fundraising, issue positioning, GOTV) — see §6.
+- **Govern Mode** is the new _Democracy_-style loop: in office you wield the
+  powers of your seat to enact policy against a budget, satisfy constituents
+  and factions, and respond to crises, all while the world simulation runs.
+- **Progression** is the career meta-game that decides whether/where you run
+  next — see §8.
 
-### 4.2 How support is computed
+---
 
-For a given region, candidate support is the sum over demographic groups of
-each group's size × that group's affinity for the candidate.
+## 4. Career & Character (the meta-game)
 
-**Group affinity** for a candidate is driven by *issue distance*:
+```ts
+interface Character {
+  id: string; name: string;
+  age: number;                 // advances with time; career ends at lifespan/retirement
+  party: PartyId;
+  stats: CandidateStats;       // charisma, intelligence, stamina, fundraising, composure, integrity
+  traits: TraitId[];           // war_hero, outsider, wonk, firebrand, machine_boss, reformer…
+  positions: Record<IssueId, number>;
+  reputation: Reputation;      // see below
+  history: OfficeRecord[];     // every office sought/held + what you did with it
+  relationships: Record<ActorId, number>; // donors, factions, party bosses, rivals, press
+  warChest: number;
+}
+
+interface Reputation {
+  // "good or bad enough" — both competence AND notoriety open doors
+  approval: number;            // current constituents
+  nameRecognition: number;     // by tier — how far your name carries
+  recordQuality: number;       // governing accomplishments (or disasters)
+  integrity: number;           // kept promises vs. flip-flops & scandals
+  notoriety: number;           // infamy can be its own kind of fuel
+}
+```
+
+- **Lifespan & age.** A career is finite. Time spent campaigning and governing
+  ages the character; eventually they retire, lose, or age out. This is the
+  ultimate scarce resource — every term spent at one tier is a term not spent
+  climbing.
+- **"Good or bad enough."** Vertical doors open via reputation, which can be
+  earned through *competence* (high approval, strong record) **or** *notoriety*
+  (a firebrand who fails upward on name recognition and a rabid base). A merely
+  mediocre politician can sustain a long, comfortable career at one tier.
+- **Persistent consequences.** Your record, relationships, and the state of the
+  world carry across terms and tiers. The budget you blew as mayor is still
+  blown when your successor inherits it; the rival you crushed remembers it.
+
+---
+
+## 5. The Simulation Model (the shared engine)
+
+The deterministic core — recomputed each turn, identical across all tiers and
+both modes. Generalizes the v0.1 model from "regions" to **constituency units**.
+
+### 5.1 Entities
+
+- **Issues** — 1-D position axis (−1.0 … +1.0). The *set* of salient issues
+  varies by tier (potholes & zoning at city scale; foreign policy at federal).
+- **Demographic groups** — each has a size (per unit), ideal position per issue,
+  issue-salience weighting, and turnout propensity.
+- **Constituency units** — wards / counties / states depending on tier. Each has
+  its prize (council seats / electoral votes / legislative seats), a demographic
+  mix, a base partisan lean, and a current support split.
+- **Candidates / officeholders** — stats, traits, positions, identity groups.
+
+### 5.2 How support is computed
+
+For each unit, support sums over demographic groups (group size × affinity):
 
 ```
 issueScore(group, candidate) =
-    Σ_issues  salience[group][issue] × (1 − |candidatePos[issue] − groupIdeal[issue]| / 2)
+    Σ_issues salience[group][issue] × (1 − |candidatePos[issue] − groupIdeal[issue]| / 2)
 
 affinity(group, candidate) =
     w_issues   × normalize(issueScore)
-  + w_identity × identityFit(group, candidate)      // charisma, traits, demographics
-  + w_lean     × partisanLean(group, region)
-  + w_campaign × campaignPressure(group, region)    // accumulated ad/rally effects
-  + noise()                                           // small per-turn variance
+  + w_identity × identityFit(group, candidate)     // charisma, traits, demographics
+  + w_lean     × partisanLean(group, unit)
+  + w_record   × recordEffect(group, officeholder) // GOVERN: your track record
+  + w_campaign × campaignPressure(group, unit)      // CAMPAIGN: decaying ad/rally effects
+  + noise()
 ```
 
-- `campaignPressure` is the accumulated, **decaying** effect of actions
-  (ads, rallies, GOTV) targeted at a region/demographic. It decays each turn
-  (`pressure *= decayFactor`, default `0.85`) so you must keep investing.
-- Support is then **softmax-normalized** across candidates + an undecided pool.
-- Region winner takes **all** its electoral votes (winner-take-all by default;
-  proportional mode is a stretch goal).
+- `recordEffect` is new for **Govern Mode**: groups react to the policies you've
+  actually enacted and the state of the world you've produced.
+- `campaignPressure` decays each turn (`*= 0.85`) so campaigning requires
+  sustained investment.
+- Support is softmax-normalized across candidates + an undecided pool; seats /
+  electoral votes are awarded per the tier's rule (winner-take-all by default).
 
-### 4.3 Turnout
-
-Final region result weights each group's support by its **effective turnout**:
+### 5.3 Turnout
 
 ```
-turnout(group, region) = baseTurnout(group)
-                       × (1 + gotvBoost(group, region))   // ground game
-                       × enthusiasm(group, candidate)      // alignment + events
+turnout(group, unit) = baseTurnout(group)
+                     × (1 + gotvBoost(group, unit))   // ground game
+                     × enthusiasm(group, candidate)    // alignment, record, events
 ```
 
-GOTV and enthusiasm let a candidate win a region by mobilizing their base even
-without converting opponents — a distinct, viable strategy.
+### 5.4 Why this design
 
-### 4.4 Why this design
-
-- It is **pure and deterministic** (given a seed) → trivially unit-testable
-  headlessly, and balanceable via simulation runs.
-- Every poll movement is **explainable** (we can render the contribution of
-  each term), satisfying the "readable depth" pillar.
-- It is **data-driven** — all entities live in JSON/TS data files, so content
-  (new issues, regions, scenarios) is added without touching engine code.
+Pure & deterministic (seeded) → unit-testable and balanceable headlessly;
+every poll movement is explainable; all content is data, so new tiers, maps,
+and scenarios ship without engine changes.
 
 ---
 
-## 5. Actions (the "Political Machine" layer)
+## 6. Campaign Mode — Actions
 
-Actions are what the player spends resources on each turn. Each has an **AP
-cost**, optional **money/capital cost**, a **target** (region / demographic /
-issue / national), and **effects**.
+What the player spends resources on while running. Each action has an AP cost,
+optional money/capital cost, a target (unit / demographic / issue / wide), and
+data-driven effects. Costs and scale auto-adjust by tier.
 
 | Action | Costs | Effect |
 |---|---|---|
-| **Hold Rally** | ⚡⚡ + 💰 | Big short-term `campaignPressure` spike in target region; boosts enthusiasm; small national bump |
-| **Run TV Ads** | ⚡ + 💰💰 | Sustained pressure toward a region, optionally framed on an issue (positive or contrast) |
-| **Attack Ad** | ⚡ + 💰💰 + 🏛️ | Lowers opponent support but risks backfire (capital cost; can trigger events) |
-| **Fundraiser** | ⚡⚡ | Converts AP/time into 💰; scaled by `fundraising` stat |
-| **Stake Issue Position** | ⚡ + 🏛️ if flip-flopping | Move your position on an issue; shifts affinity across all regions |
-| **Debate Prep / Debate** | ⚡⚡ | Scheduled events; performance scales with `intelligence`/`composure` stats |
-| **Build Field Office** | ⚡ + 💰 | Persistent GOTV bonus in a region for the rest of the campaign |
-| **Seek Endorsement** | ⚡ + 🏛️ | Chance-based; grants pressure with aligned demographics + capital |
-| **Whistle-stop Tour** | ⚡⚡⚡ | Hit several adjacent regions at lower per-region effect |
-| **Rest / Recover** | — | Skip to bank stamina for next turn (raises next turn's AP cap) |
+| **Hold Rally** | ⚡⚡ + 💰 | Short-term pressure spike + enthusiasm in target unit |
+| **Run Ads** | ⚡ + 💰💰 | Sustained pressure toward a unit, framed on an issue |
+| **Attack Ad** | ⚡ + 💰💰 + 🏛️ | Lowers opponent support; can backfire |
+| **Fundraiser** | ⚡⚡ | Converts time into 💰, scaled by `fundraising` |
+| **Door-knock / Retail** | ⚡⚡ | High-impact, small-scale — dominant at **city** tier |
+| **Stake Issue Position** | ⚡ (+🏛️ if flip-flopping) | Shifts affinity across all units |
+| **Debate** | ⚡⚡ | Scheduled; scales with `intelligence`/`composure` |
+| **Build Field Office** | ⚡ + 💰 | Persistent GOTV bonus in a unit |
+| **Seek Endorsement** | ⚡ + 🏛️ | Chance-based; pressure with aligned groups + capital |
 
-Actions are **data-driven** too: an action is a record describing costs,
-targeting rules, and a list of effect operators the engine applies.
-
----
-
-## 6. Candidates
-
-```ts
-interface Candidate {
-  id: string;
-  name: string;
-  party: PartyId;
-  stats: {
-    charisma: number;     // identity affinity, rally/speech effectiveness
-    intelligence: number; // debate performance, event resolution
-    stamina: number;      // AP per turn
-    fundraising: number;  // money per fundraiser
-    composure: number;    // scandal/event resilience
-    integrity: number;    // flip-flop penalty modifier, scandal likelihood
-  };
-  traits: TraitId[];      // e.g. "war_hero", "outsider", "wonk", "firebrand"
-  positions: Record<IssueId, number>; // −1 … +1 per issue
-  demographics: DemographicId[];       // candidate's own identity groups
-}
-```
-
-Traits are modifiers that hook into the simulation (e.g. `outsider` boosts
-affinity with anti-establishment groups but lowers it with `business`).
+Resources: **Action Points/Stamina (⚡)**, **Money (💰)**, **Political Capital
+(🏛️)**, and **Time (🗓️, the turn counter)**. Money carries over; AP does not.
 
 ---
 
-## 7. Events & News Cycle (the narrative layer)
+## 7. Govern Mode — Holding Office & the Living World
 
-Each turn's **news phase** may fire 0–N events from a weighted, condition-gated
-pool. An event is data:
+The other half of the game, unlocked by winning. While in office you wield your
+seat's **powers** over periodic turns; the **living world** responds.
 
-```ts
-interface GameEvent {
-  id: string;
-  trigger: Condition;        // e.g. "behind in polls", "ran 3+ attack ads", random
-  weight: number;
-  headline: string;
-  body: string;
-  choices: EventChoice[];    // each choice: cost + effects + follow-on events
-}
-```
+### 7.1 Governing actions (powers scale by tier & office)
 
-Examples: a gaffe caught on camera, an economic report, an opponent scandal you
-can amplify (capital cost), a natural disaster demanding a response, a donor
-ultimatum. Choices route back into the same effect system as actions, so the
-narrative layer and the systems layer share one engine.
+| Power | Example | Effect |
+|---|---|---|
+| **Set Budget** | Allocate revenue across services/programs | Funds services, runs deficits/surpluses, pleases/angers groups |
+| **Enact Policy / Ordinance** | Zoning reform, policing policy, tax change | Moves world variables + group satisfaction (the _Democracy_ web) |
+| **Fund Development** | Approve a project, district, infrastructure | Drives **city growth**: population, economy, new units over time |
+| **Make Appointments** | Staff, commissioners, judges | Buffs governing effectiveness; spends/earns relationships |
+| **Handle Crisis** | Respond to events (disaster, scandal, downturn) | Time-pressured choices with lasting world + reputation effects |
+| **Deal-making** | Trade votes/favors with factions & rivals | Spends political capital & relationships to pass agendas |
 
----
+### 7.2 The living world simulation
 
-## 8. Opponent AI
+Each governing turn advances a **world model** that exists independent of
+elections and carries across terms and successors:
 
-Start simple, layer sophistication:
+- **City tier:** population, jobs, housing, economy, public services, crime,
+  district development. "Oversee the growth of a city" = steering this model
+  over many terms; neglect causes decay, blight, flight.
+- **State tier:** regional economy, inter-city dynamics, statewide services.
+- **Federal tier:** national economy, geopolitics, federal programs.
 
-1. **v1 — Heuristic:** score each available action by expected EV-gain per AP
-   (using the same simulation as a lookahead), pick greedily within budget.
-   Targets the closest-margin regions worth the most EVs.
-2. **v2 — Personalities:** AI candidates weight action types by their traits
-   (a `firebrand` favors rallies/attack ads; a `wonk` favors issue framing).
-3. **v3 (stretch) — Shallow lookahead:** 1–2 turn search over a pruned action
-   set.
+The world model feeds back into the support simulation via `recordEffect`
+(§5.2): visible outcomes (a booming downtown, a budget crisis, rising crime)
+shift how demographics judge you. **Your record is the world you produced.**
 
-Because the simulation is pure, the AI can call it directly to evaluate moves.
+### 7.3 Govern ↔ Campaign coupling
 
----
-
-## 9. Win Condition & Scoring
-
-- **Win:** secure a majority of total electoral votes on election day
-  (default board total 538 → 270 to win).
-- **Tie/contingency** (stretch): below threshold → "contingent election"
-  mini-resolution.
-- **Score** for post-game: margin of victory, money efficiency, regions flipped,
-  integrity maintained (didn't flip-flop) — feeds difficulty/achievements later.
+A strong record + happy constituents → easy re-election and higher name
+recognition (climbing fuel). A disastrous or do-nothing term → primary
+challenges, lost seats, and capped ambition. The two modes are one feedback loop.
 
 ---
 
-## 10. Architecture
+## 8. Progression — Between Terms & Across Tiers
 
-Separate **simulation** from **presentation** so the hard part is built and
-proven before any UI work.
+After each term the **Progression** step decides what's next:
+
+- **Re-run** for the same office (subject to term limits).
+- **Seek higher office** — gated by **eligibility** (name recognition, record,
+  party support, war chest) and by **opportunity** (an open seat, a beatable
+  incumbent, the right political moment). This is where "good or bad enough"
+  bites: you need enough reputation *of some kind* to be viable.
+- **Stay put for life** — a fully supported path; the game must remain rich
+  for a career-long city or state politician.
+- **Retire / age out / lose** — the career ends; a **post-career summary**
+  scores the life (offices held, world impact, integrity, legacy).
+
+Climbing a tier resets you to a relative underdog at a larger scale (a giant
+fish in the small pond becomes a minnow in the big one) — the classic risk of
+ambition. Failed jumps can end careers or send you back down.
+
+---
+
+## 9. Events & News Cycle
+
+Each turn (both modes) may fire weighted, condition-gated events from a data
+pool: gaffes, scandals, economic reports, disasters, donor ultimatums,
+opportunities to exploit a rival. Event choices route into the same effect
+system as actions/powers, so narrative and systems share one engine.
+
+---
+
+## 10. Opponent & World AI
+
+1. **v1 — Heuristic candidates:** score actions by expected gain per AP using
+   the sim as a lookahead; target the closest worthwhile units.
+2. **v1 — Governing rivals/factions:** other officeholders run the world model
+   too; factions push agendas you must deal with.
+3. **v2 — Personalities:** AI weights behavior by traits.
+4. **v3 (stretch) — Shallow lookahead** over pruned actions.
+
+Because the sim is pure, AI evaluates moves by calling it directly.
+
+---
+
+## 11. Architecture
+
+Separate **simulation** from **presentation**; build one engine that serves all
+tiers and both modes.
 
 ```
 the-politician/
 ├─ packages/
-│  ├─ core/                 # pure TypeScript, zero UI deps — THE ENGINE
-│  │  ├─ models/            # Candidate, Region, Issue, Demographic, Action, Event
-│  │  ├─ data/              # JSON/TS content: regions, issues, demographics, scenarios
-│  │  ├─ sim/               # support model, turnout, pressure decay, election tally
-│  │  ├─ actions/           # action definitions + effect operators
-│  │  ├─ events/            # event pool + resolution
-│  │  ├─ ai/                # opponent heuristics
-│  │  ├─ engine.ts          # turn state machine; pure reducer: (state, command) → state
-│  │  └─ rng.ts             # seeded RNG for determinism
-│  ├─ cli/                  # terminal harness over core — first playable
-│  └─ web/                  # (later) React + SVG electoral map over the same core
+│  ├─ core/                  # pure TypeScript, zero UI deps — THE ENGINE
+│  │  ├─ models/             # Character, Office, Unit, Issue, Demographic, Action, Power, Event
+│  │  ├─ data/               # content: tiers, scenarios, maps, issues, demographics
+│  │  │  ├─ tiers/           # city / state / federal definitions
+│  │  │  └─ scenarios/       # complete playable setups
+│  │  ├─ sim/                # support, turnout, pressure decay, election tally
+│  │  ├─ world/              # living-world model (growth/economy) + record effects
+│  │  ├─ actions/            # campaign actions + effect operators
+│  │  ├─ powers/             # governing powers + effect operators
+│  │  ├─ events/             # event pool + resolution
+│  │  ├─ career/             # lifespan, progression, eligibility, scoring
+│  │  ├─ ai/                 # candidate + governing AI
+│  │  ├─ engine.ts           # nested state machine; pure reducer (state, command) → state
+│  │  └─ rng.ts              # seeded RNG for determinism
+│  ├─ cli/                   # terminal harness over core — first playable
+│  └─ web/                   # (later) React + SVG map over the same core
 ```
 
-**Key principles**
+**Principles**
 
-- `core` is **deterministic** (seeded RNG) and **side-effect free** → unit tests
-  + balance simulations run headlessly in this environment.
-- Game state advances through a **pure reducer** `(state, command) → newState`,
-  which both the CLI and web UIs dispatch into — UIs hold no game logic.
-- All **content is data**, not code. New maps/issues/scenarios are JSON.
+- `core` is **deterministic** (seeded RNG) and **side-effect free** → unit
+  tests + balance simulations run headlessly here.
+- State advances through a **pure reducer** `(state, command) → newState`; both
+  CLI and web dispatch into it and hold no game logic.
+- **Tiers, offices, maps, issues, world rules are all data** — new tiers and
+  scenarios ship without engine changes.
 
-**Tech stack**
-
-- **Language:** TypeScript (strict).
-- **Runtime/build:** Node + a fast bundler (Vite for web).
-- **Tests:** Vitest — unit tests for the sim + golden-master balance snapshots.
-- **CLI:** Node + a light prompt/render lib (or plain readline to start).
-- **Web (later):** React + SVG/Canvas electoral map; deploy free to GitHub Pages.
+**Tech:** TypeScript (strict) · Node + Vite · Vitest (unit + golden-master
+balance snapshots) · CLI first · later React + SVG/Canvas map, deployed free to
+GitHub Pages.
 
 ---
 
-## 11. Data Schema (v1 starter)
+## 12. Data Schema (v2 starter)
 
 ```ts
-type IssueId = string;
-type DemographicId = string;
-type RegionId = string;
-type PartyId = string;
+type IssueId = string; type DemographicId = string;
+type UnitId = string;  type PartyId = string;
+type OfficeId = string; type TierId = "city" | "state" | "federal";
 
-interface Issue   { id: IssueId; name: string; }
+interface Issue { id: IssueId; name: string; tiers: TierId[]; }
+
 interface Demographic {
   id: DemographicId; name: string;
   ideals: Record<IssueId, number>;     // −1 … +1
-  salience: Record<IssueId, number>;   // 0 … 1, weights, sum≈1
+  salience: Record<IssueId, number>;   // 0 … 1, sum ≈ 1
   baseTurnout: number;                 // 0 … 1
 }
-interface Region {
-  id: RegionId; name: string;
-  electoralVotes: number;
-  partisanLean: number;                // −1 (party B) … +1 (party A)
-  mix: Record<DemographicId, number>;  // group shares, sum≈1
+
+interface Unit {                        // ward / county / state, per tier
+  id: UnitId; name: string; tier: TierId;
+  seats: number;                        // prize: council seats / electoral votes / etc.
+  partisanLean: number;                 // −1 … +1
+  mix: Record<DemographicId, number>;   // group shares, sum ≈ 1
 }
-interface Scenario {                   // a complete playable setup
+
+interface Office {
+  id: OfficeId; name: string; tier: TierId;
+  termLength: number;                   // turns/years
+  termLimit?: number;
+  powers: PowerId[];                    // what you can do once seated
+  eligibility: EligibilityRule;         // what it takes to run
+}
+
+interface WorldState {                  // the living world for the current jurisdiction
+  population: number; economy: number; budget: number;
+  services: Record<string, number>;
+  development: Record<UnitId, number>;
+  // …tier-specific fields
+}
+
+interface Scenario {                    // a complete playable world
   id: string; name: string;
-  weeks: number;
-  issues: Issue[];
-  demographics: Demographic[];
-  regions: Region[];
-  candidates: Candidate[];
-  startingMoney: number;
+  tiers: TierId[];
+  issues: Issue[]; demographics: Demographic[];
+  units: Unit[]; offices: Office[];
+  candidates: Character[];
+  world: WorldState;
 }
 ```
 
 ---
 
-## 12. Milestone Roadmap
+## 13. Milestone Roadmap
+
+Build the **city tier as a full vertical slice first** — it exercises both
+Campaign and Govern modes plus the living-world sim at the smallest, cheapest
+scale. Then generalize the proven engine to state & federal, then wire up the
+cross-tier career.
 
 ### M0 — Engine foundations (headless, testable here)
-- [ ] Project scaffold (`core` package, TS strict, Vitest).
-- [ ] Data models + a small **starter scenario** (≈8 regions, 6 issues, 5 demographics, 2 candidates).
-- [ ] Seeded RNG.
-- [ ] Support + turnout simulation; election tally.
-- [ ] Unit tests proving monotonicity (moving toward a group's ideal raises its affinity, etc.).
+- [ ] Scaffold `core` (TS strict, Vitest), seeded RNG.
+- [ ] Data models + a small **city scenario** (~6 wards, 6 local issues, 5 demographics).
+- [ ] Support + turnout simulation; seat tally.
+- [ ] Unit tests: monotonicity & determinism.
 
-### M1 — Playable core loop (CLI)
-- [ ] Turn state machine / reducer + resource economy (AP, money, capital).
-- [ ] First action set (Rally, Ads, Fundraiser, Stake Position, GOTV).
-- [ ] CLI harness: play a full 20-week campaign in the terminal vs. a do-nothing opponent.
-- [ ] Weekly polling report.
+### M1 — City vertical slice: campaign + govern (CLI)
+- [ ] Nested state machine: Term → Campaign → Govern → end-of-term.
+- [ ] Campaign Mode loop + first actions (Rally, Ads, Fundraiser, Retail, Position).
+- [ ] Govern Mode loop + first powers (Budget, Ordinance, Development).
+- [ ] Living **city** world model + `recordEffect` feedback into the sim.
+- [ ] CLI: win a council/mayor race, then govern a term, in the terminal.
 
-### M2 — Make it a game
-- [ ] Heuristic opponent AI (v1).
-- [ ] Event/news system + a starter event pool.
-- [ ] Endorsements, debates, attack ads + backfire.
-- [ ] Balance pass via batch simulations; golden-master tests.
+### M2 — Make the city a full game
+- [ ] Heuristic opponent + governing rivals/factions AI.
+- [ ] Event/news system + starter pool (campaign + governing events).
+- [ ] City growth/decay dynamics across multiple terms.
+- [ ] Balance pass via batch sims; golden-master tests.
 
-### M3 — Web UI
-- [ ] Vite + React app over the same `core`.
-- [ ] Interactive SVG electoral map (support shading, EV count).
-- [ ] Action/planning panel, weekly report, results screen.
+### M3 — Career meta-game (single tier)
+- [ ] Lifespan/age, multiple terms, re-election, term limits.
+- [ ] Reputation model (approval, name recognition, record, integrity, notoriety).
+- [ ] Post-career scoring & legacy summary.
+- [ ] Prove a satisfying career-long **city-only** game.
+
+### M4 — State & Federal tiers (engine reuse)
+- [ ] State + federal tier data (units, offices, issues, powers, world models).
+- [ ] Cross-tier **Progression**: eligibility, seeking higher office, the
+      underdog reset, failed-jump consequences.
+- [ ] Validate all three single-tier games and the full climb.
+
+### M5 — Web UI & content (stretch)
+- [ ] Vite + React over the same `core`; interactive SVG maps per tier.
+- [ ] Campaign/Govern/Career screens; results & legacy views.
 - [ ] Deploy to GitHub Pages.
-
-### M4 — Depth & content (stretch)
-- [ ] More scenarios / full 50-state map.
-- [ ] Candidate traits library; primaries phase.
-- [ ] Proportional/contingent election modes.
-- [ ] Difficulty levels (AI lookahead, resource handicaps).
-- [ ] Save/load; post-game scoring & achievements.
+- [ ] More scenarios, candidate traits, difficulty levels, save/load.
 
 ---
 
-## 13. Open Questions
+## 14. Open Questions
 
-- **Setting:** real US states + real parties, or a fictional country/parties to
-  sidestep partisanship and licensing? (Recommend **fictional + data-swappable**,
-  so a US map is just one scenario file.)
-- **Number of candidates:** 1v1 to start; support 3+ later?
-- **Match length:** 20 weeks default — tune for a ~20–30 min CLI session.
-- **Tone:** earnest strategy vs. satirical? Affects event writing.
+- **Setting:** real US places/parties, or a **fictional, data-swappable**
+  world? (Recommend fictional-first — real maps become scenario files later,
+  and it sidesteps partisanship/licensing.)
+- **Continuity across tiers:** one persistent world the character moves *up*
+  through (the city you ran is part of the state you now govern), or separate
+  jurisdictions per office? (Persistent is richer but more complex — likely M4+.)
+- **Time granularity:** campaign turns are weeks; what's a govern turn — months?
+  quarters? Must let a full multi-term career finish in a reasonable session.
+- **Lifespan length:** target career length (terms) and how aggressively age
+  limits ambition.
+- **Tone:** earnest civics sim vs. satirical — shapes event writing and traits.
+- **Death/health:** does the character age and risk health events (life-sim
+  flavor), or simply retire at a set age?
