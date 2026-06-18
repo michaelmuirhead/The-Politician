@@ -10,7 +10,7 @@
 > Careers span decades and end in retirement or death; when one life ends, an
 > heir or protégé can carry the lineage on across generations.
 
-**Status:** Design draft v0.3
+**Status:** Design draft v0.4
 **Genre:** Turn-based political career/dynasty sim (campaign strategy + governing sim)
 **Inspirations:** _The Political Machine_ (campaign loop), _The Campaign Trail /
 President Infinity_ (electoral layer), _Democracy_ (governing simulation),
@@ -26,6 +26,17 @@ life-sim career & dynasty progression, city-builder world dynamics.
 | **Career length** | **Long / generational** — multi-decade careers and dynastic succession across generations. |
 | **Tone** | **Earnest civics sim** — realistic issues, credible trade-offs, news-like events; dry wit at most. |
 | **Aging & death** | **Hard mortality** — characters age and can die (health, accidents, age), even in office, forcing succession. |
+
+### Follow-on decisions (v0.4)
+
+| Question | Decision |
+|---|---|
+| **Data scope** | **Full nation from the start** — the entire US (all states, major cities, districts) exists in the persistent world; engine bring-up still validates on a focused slice. |
+| **Party realism** | **Real party names, generic data-driven platforms** — no real politicians or current events; evergreen and non-editorializing. |
+| **Succession** | **Auto-pool + grooming** — a pool of heirs/protégés is generated, and the player can actively groom successors during a career. |
+| **Mortality tuning** | **Actuarial age curve + stress modifiers**, lowered by health/lifestyle; optional **"no permadeath" mode**. |
+| **Vacant seats** | **Real US rules per office** — appointment, special election, or line-of-succession depending on the seat. |
+| **Time advance** | **Smart skip** — auto-advance through quiet quarters; stop on events, due decisions, or approaching elections. |
 
 ---
 
@@ -101,9 +112,11 @@ occupy one seat at a time; AI holds the rest.
 | **"Living world" layer** | City growth (population, economy, districts) | State economy & inter-city dynamics | National economy & geopolitics |
 | **Campaign scale** | Small money, retail politics, door-knocking | Bigger money, media, regional targeting | Massive money, national media, the electoral map |
 
-**Real parties.** Candidates run under real U.S. parties (Democratic,
-Republican, plus minor/independent options), each with baseline demographic
-leans that the simulation treats as data.
+**Real parties, generic platforms.** Candidates run under real U.S. party names
+(Democratic, Republican, plus minor/independent options), each with baseline
+demographic leans the simulation treats as data. Platforms are **generic and
+data-driven** — no real politicians, named figures, or current events — so the
+game stays evergreen and avoids editorializing.
 
 **Key reuse:** a "constituency unit" is the generalization of the v0.1 *Region*.
 The support simulation (§5) runs identically at every tier — only the units,
@@ -146,6 +159,11 @@ DYNASTY  (a lineage, across generations)
 The simulation clock runs continuously across the whole world, so AI-held
 offices campaign, govern, and turn over on their own schedules while you play
 yours.
+
+**Smart fast-forward.** Because careers span decades of quarterly turns, the
+game **auto-advances through quiet quarters** and stops only when the player is
+needed — an event fires, a decision is due, or an election approaches. This
+keeps generational play brisk without reducing meaningful turns to busywork.
 
 - **Campaign Mode** is the v0.1 electoral strategy loop (rallies, ads,
   fundraising, issue positioning, GOTV) — see §6.
@@ -196,18 +214,21 @@ interface Reputation {
 
 - **Lifespan, age & mortality.** A career is finite. Time spent campaigning and
   governing ages the character and wears down `health`; eventually they retire,
-  lose, age out — or **die**. Death can strike even mid-term (health events,
-  accidents, old age), triggering succession and, for an officeholder, a special
-  election or appointment handled by the world. Age is the ultimate scarce
+  lose, age out — or **die**. Death risk follows a realistic **actuarial age
+  curve**, raised by **stress** (hard campaigns, crises, scandals) and lowered by
+  **health/lifestyle** choices; it can strike even mid-term, triggering
+  succession and a seat-filling process (§8). Age is the ultimate scarce
   resource: every term spent at one tier is a term not spent climbing, and the
-  clock never stops.
-- **Lineage & succession.** When a character's run ends, the player may continue
-  as one of their **successors** (a groomed heir or political protégé), who
-  inherits the lineage name, a portion of its relationships, and its `legacy`.
-  Grooming successors (and building the family/machine's standing) is its own
-  long-game: a strong lineage gives the next character a head start; a disgraced
-  one is a liability to live down. This is how a "long / generational" game spans
-  the decades.
+  clock never stops. A **"no permadeath" mode** is available for players who want
+  a single uninterrupted career.
+- **Lineage & succession.** When a character's run ends, the player continues as
+  one of their **successors** (an heir or political protégé), who inherits the
+  lineage name, a portion of its relationships, and its `legacy`. Successors
+  come from **both** an auto-generated pool *and* deliberate **grooming** during
+  a career (mentoring, endorsements, building the family/machine's standing). A
+  strong, well-tended lineage gives the next character a head start; a disgraced
+  or neglected one is a liability to live down. This is how a "long /
+  generational" game spans the decades.
 - **"Good or bad enough."** Vertical doors open via reputation, which can be
   earned through *competence* (high approval, strong record) **or** *notoriety*
   (a firebrand who fails upward on name recognition and a rabid base). A merely
@@ -358,10 +379,14 @@ After each term the **Progression** step decides what's next:
   for a career-long city or state politician.
 - **Retire / age out / lose / die** — the character's run ends; a **post-career
   summary** scores the life (offices held, world impact, integrity, legacy).
-- **Succession** — the player continues the **lineage** as a groomed heir or
-  protégé (§4), inheriting name, partial relationships, and accumulated legacy.
-  A death in office additionally triggers the world's own replacement process
-  (special election / appointment) for the seat itself.
+- **Succession** — the player continues the **lineage** as an heir or protégé
+  (§4), inheriting name, partial relationships, and accumulated legacy.
+- **Filling vacant seats** — when any officeholder (player or AI) dies or leaves
+  mid-term, the seat is filled per **real US rules for that office**: e.g.
+  governor-appointed replacements for U.S. Senate seats, special elections for
+  the U.S. House and many mayoralties, and line-of-succession for executives
+  (a deceased mayor's seat passing to council leadership, etc.). Each office
+  carries its own `vacancyRule` in data.
 
 Climbing a tier resets you to a relative underdog at a larger scale (a giant
 fish in the small pond becomes a minnow in the big one) — the classic risk of
@@ -477,6 +502,7 @@ interface Office {
   termLimit?: number;
   powers: PowerId[];                    // what you can do once seated
   eligibility: EligibilityRule;         // what it takes to run
+  vacancyRule: "appointment" | "special_election" | "succession"; // real US rule
 }
 
 interface WorldState {                  // the living world for the current jurisdiction
@@ -500,15 +526,23 @@ interface Scenario {                    // a complete playable world
 
 ## 13. Milestone Roadmap
 
-Build the **city tier as a full vertical slice first** — it exercises both
-Campaign and Govern modes plus the living-world sim at the smallest, cheapest
-scale. Then generalize the proven engine to state & federal, then wire up the
-cross-tier career.
+The persistent world is the **full nation from the start**, but we de-risk by
+building the **city tier as a playable vertical slice first** — the player's
+seat is one real city while the rest of the US exists around them (simulated
+coarsely at first, refined as tiers come online). This exercises both Campaign
+and Govern modes plus the living-world sim cheaply, then the proven engine
+generalizes upward.
 
-### M0 — Engine foundations (headless, testable here)
+A parallel **national data pipeline** (M0+) ingests real US geography and
+demographics (public census/electoral sources) into swappable data files,
+refined in resolution over the milestones.
+
+### M0 — Engine foundations + data pipeline (headless, testable here)
 - [ ] Scaffold `core` (TS strict, Vitest), seeded RNG.
-- [ ] Data models + a small **real-US city scenario** (one real city, ~6 wards,
-      6 local issues, 5 demographics, real parties).
+- [ ] Data models + national data ingestion: nested US states/cities/districts,
+      real party leans, issue & demographic schema (coarse first pass).
+- [ ] A focused **playable slice**: one real city wired for full play; the rest
+      of the nation present but coarse.
 - [ ] Support + turnout simulation; seat tally.
 - [ ] Unit tests: monotonicity & determinism.
 
@@ -526,17 +560,21 @@ cross-tier career.
 - [ ] Balance pass via batch sims; golden-master tests.
 
 ### M3 — Career, mortality & dynasty (single tier)
-- [ ] Lifespan/age, **health & hard mortality** (incl. death in office), multiple
-      terms, re-election, term limits.
+- [ ] Lifespan/age, **health & hard mortality**: actuarial age curve + stress
+      modifiers, lowered by health/lifestyle; death-in-office; "no permadeath" mode.
+- [ ] **Vacant-seat filling** per real US `vacancyRule` (appointment / special
+      election / succession).
 - [ ] Reputation model (approval, name recognition, record, integrity, notoriety).
-- [ ] **Lineage & succession**: heirs/protégés, inherited relationships, legacy.
+- [ ] **Lineage & succession**: auto-generated heir pool + active grooming,
+      inherited relationships, legacy.
 - [ ] **Save/load** of the long-running world + lineage (first-class).
+- [ ] **Smart fast-forward** through quiet quarters.
 - [ ] Post-career & dynasty scoring; prove a satisfying multi-generation
       **city-only** game.
 
-### M4 — State & Federal tiers + nested persistent world (engine reuse)
-- [ ] State + federal tier data (units, offices, issues, powers, world models)
-      for the real US.
+### M4 — State & Federal tiers + full nested world (engine reuse)
+- [ ] Refine national data to full resolution: state + federal units, offices,
+      issues, powers, world models.
 - [ ] **Nested world roll-up**: city ⊂ state ⊂ nation; AI runs all unheld
       offices; levels influence each other.
 - [ ] Cross-tier **Progression**: eligibility, seeking higher office, the
@@ -551,29 +589,23 @@ cross-tier career.
 
 ---
 
-## 14. Resolved Decisions & Follow-on Questions
+## 14. Resolved Decisions & Remaining Questions
 
-The six original open questions are now **resolved** (see the table at the top
-of this document): real US setting, one persistent nested world, quarterly
-govern turns, long/generational careers, earnest tone, and hard mortality.
+All twelve design questions raised so far are now **resolved** — see the two
+decision tables at the top of this document (core decisions v0.3, follow-on
+decisions v0.4).
 
-New questions these decisions surface, to settle as we build:
+Remaining questions are **implementation-level**, to settle as we build:
 
-- **Real-US data scope & sourcing.** How much real geography/demography do we
-  model, and where does the data come from? (Recommend: start with **one real
-  city** in M0–M3; expand to its state and the nation in M4. Use public
-  census/electoral data; keep it as swappable data files.)
-- **Party realism vs. neutrality.** Real parties — but do we model real
-  *politicians* and current events, or keep named parties with generic,
-  data-driven platforms to stay evergreen and avoid editorializing?
-- **Succession control.** Are heirs auto-generated, hand-groomed by the player
-  during a career, or both? How much do stats/positions carry over vs. reset?
-- **Mortality tuning.** How punishing is death (actuarial-by-age curve + stress
-  modifiers)? Optional "no permadeath" mode for players who want a single long
-  career?
-- **Special-election handling.** When an officeholder (player or AI) dies
-  mid-term, how does the world fill the seat — appointment, special election,
-  succession rules per office?
-- **Session length & fast-forward.** With quarterly turns over generational
-  spans, how aggressively can the player skip quiet periods while keeping
-  governing meaningful?
+- **Data sourcing specifics.** Exact public datasets for the national geography
+  and demographics, and how finely to model districts/wards initially.
+- **Successor carry-over.** How much of a predecessor's stats, positions, and
+  relationships transfer to an heir vs. start fresh.
+- **Stress & health formulas.** The precise curves linking campaign/crisis
+  stress and lifestyle choices to mortality risk.
+- **Difficulty surface.** What "no permadeath" and other difficulty toggles
+  expose (AI strength, resource handicaps, mortality on/off).
+- **Tuning the smart fast-forward.** Exactly which conditions force a stop, and
+  whether the player can set their own interrupt rules.
+
+These don't block engine work — the next concrete step is **M0**.
