@@ -10,7 +10,7 @@
 > Careers span decades and end in retirement or death; when one life ends, an
 > heir or protégé can carry the lineage on across generations.
 
-**Status:** Design draft v0.4
+**Status:** Design draft v0.5
 **Genre:** Turn-based political career/dynasty sim (campaign strategy + governing sim)
 **Inspirations:** _The Political Machine_ (campaign loop), _The Campaign Trail /
 President Infinity_ (electoral layer), _Democracy_ (governing simulation),
@@ -293,6 +293,44 @@ Pure & deterministic (seeded) → unit-testable and balanceable headlessly;
 every poll movement is explainable; all content is data, so new tiers, maps,
 and scenarios ship without engine changes.
 
+### 5.5 Political leanings & drift (historically seeded)
+
+Every place — **state, city, county/parish/borough, ward** — starts from a
+**`baselineLean`** reflecting *current real-world political reality*, seeded from
+recent election data (a Cook-PVI-style partisan index plus demographic mix).
+Mississippi starts red, Massachusetts blue, a rural parish deep red inside a
+purple state, a downtown ward blue inside a red city. The baseline is **data,
+seeded once** from history; the game does not pretend a place is a blank slate.
+
+Two values are tracked per unit:
+
+| Field | Meaning |
+|---|---|
+| `baselineLean` | Immutable historical anchor (the real-world starting reality). |
+| `currentLean` | The live lean, which **drifts** away from baseline over time. |
+
+```
+nextLean = currentLean
+         + driftFromGovernance   // sustained successful/failed records (recordEffect, §5.2)
+         + driftFromDemographics // slow population/economic change in the world model
+         + driftFromNationalMood // tides from the tier above (nested world)
+         − meanReversion × (currentLean − baselineLean)   // inertia pulls back home
+```
+
+- **Inertia is real.** `meanReversion` makes leanings *sticky*: a single good
+  term won't flip a deep-red county. Lasting realignment takes **sustained**
+  governing success (or demographic change) over many terms — so flipping a
+  place is a genuine, hard-won achievement, and neglect lets it snap back.
+- **You can move it, slowly.** A wildly successful, popular run visibly shifts
+  `currentLean` in your favor and can *re-anchor* a place over a long enough
+  career/dynasty; this is a core long-game reward and a lever for the climb.
+- **Nesting.** Leanings roll up: a county's lean aggregates its wards; a state's
+  aggregates its counties; national mood feeds back down as a tide. Consistent
+  with §7.2's nested world.
+
+This makes the map feel like the real country at the start, while still letting a
+great (or catastrophic) career rewrite the political geography over generations.
+
 ---
 
 ## 6. Campaign Mode — Actions
@@ -501,6 +539,118 @@ extend the `local.*` / `state.* `/ `federal.*` namespaces; whole new tiers
 (e.g. county, school board, supranational) slot in by declaring their domain
 namespace and offices. The engine, gate, and effect system stay unchanged.
 
+### 7.6 Chambers, Committees & the Legislative Pipeline
+
+How a proposal actually *becomes law* differs by tier. The structure is **data**
+(a `LegislativeBody` with one or more `Chamber`s and `Committee`s), so the same
+pipeline engine serves all three:
+
+| Tier | Structure (real-world) |
+|---|---|
+| **City** | Usually **unicameral** council. Two common forms: **mayor-council** (strong mayor with a **veto**; council overrides, typically 2/3) and **council-manager** (ceremonial mayor, professional manager, often **no veto**). Larger councils have standing committees (finance, zoning, public safety). |
+| **State** | **Bicameral** (House/Assembly + Senate) in 49 states; **Nebraska unicameral & nonpartisan**. Powerful standing committees + chairs; many governors have a **line-item veto** on appropriations. |
+| **Federal** | **Bicameral**: House (435, by population) + Senate (100, 2/state). Deep committee/subcommittee system; House **Rules Committee** sets debate; Senate **filibuster/cloture (60)**. President: veto, **no line-item veto**, pocket veto. |
+
+**The pipeline** (a proposal advances stage by stage; the player acts at the
+stage their seat touches):
+
+```
+Introduce (sponsor)                  ← requires introduceRights (§7.5)
+  → Committee referral (by domain)   ← routed to the committee owning that domain
+  → Committee GATE (chair decision)  ← chair can schedule, table (let it die), or amend
+  → Markup & committee vote          ← amend; must report out to advance
+  → Floor scheduling                 ← (House Rules / Senate calendar / council agenda)
+  → Floor vote (chamber 1)           ← passage math below
+  → Second chamber (if bicameral)    ← repeat referral→committee→floor
+  → Reconciliation (conference)      ← reconcile differing versions into one text
+  → Executive action                 ← sign / veto / line-item veto (where allowed)
+  → Override attempt (if vetoed)     ← supermajority math below
+```
+
+**Committee gatekeeping** is a first-class power. A **committee chair** (a seat
+the player can hold or pursue) decides whether a referred proposal is scheduled,
+amended, or **tabled to die** — the single most common way real bills fail
+("died in committee"). This makes chairs and committee assignments valuable
+career targets and gives minority players a real obstacle to route around
+(discharge petitions, attaching as a rider — see §7.7).
+
+**Passage math (floor vote).** For a chamber of `N` seats, count support as a
+whip tally:
+
+```
+yes = Σ_members P(member votes yes)
+P(yes | member) = base(partyLine, member.positions vs. proposal)   // ideology/party
+               + influence(sponsor, leadership) − pressure(opposition)  // whipping
+               + dealValue(member)                                  // §7.7 logrolling
+passes(chamber) = yes ≥ threshold(passageRule, N)
+```
+
+- `threshold`: **majority** = ⌊N/2⌋+1; **supermajority** = ⌈k·N⌉ (e.g. 3/5, 2/3
+  per rule); **cloture** (federal Senate) = 60 to end debate *before* a majority
+  final vote — a distinct hurdle the minority can sustain (filibuster).
+- Bicameral proposals must pass **both** chambers; conference reconciles text,
+  then both chambers approve the conference report.
+
+**Executive veto-override math.** If the executive vetoes:
+
+```
+overridden = passes(chamber, supermajority) in ALL chambers
+overrideThreshold default = ⌈2/3 · N⌉ per chamber   // configurable per jurisdiction
+```
+
+- **Line-item veto** (many governors; **not** the U.S. President): the executive
+  may strike *individual items* (esp. appropriations / riders) rather than the
+  whole bill — each struck item is independently subject to override. This is the
+  key counter to rider-stuffing (§7.7).
+- **Pocket veto**: if unsigned when the session ends, the bill dies with no
+  override available.
+
+### 7.7 Omnibus Bills, Riders & Logrolling (state & federal)
+
+**In real life.** An *omnibus* bill bundles many separate measures — often
+must-pass appropriations — into one large vehicle. Legislatures use them to move
+a crowded agenda in one vote, to avoid a government shutdown, and for
+**logrolling**: attaching a member's pet provision (a **rider**) to a bill that
+*will* pass, trading "your vote for my rider." Upsides: efficiency and getting
+hard things over the line. Downsides: reduced transparency, hidden pork,
+take-it-or-leave-it pressure, and less deliberation. Two real constraints shape
+them: many **state constitutions impose single-subject / germaneness rules** that
+*limit* omnibus bills, while the **federal** process is far more permissive — and
+**line-item veto** (state governors) lets executives strike riders the federal
+president cannot.
+
+**In the game (state & federal only).** A player with the standing to do so
+(leadership, a committee chair, or a budget sponsor) can **bundle** proposals
+into an omnibus, and any member can try to **attach a rider** to a moving
+vehicle. The fun lives in the trade-offs:
+
+- **Anchor + ride-along.** Bundle weak-but-wanted provisions onto a popular or
+  **must-pass anchor** (a budget). The anchor's momentum carries riders that
+  would die on their own — and bypasses hostile **committee gatekeeping** (§7.6),
+  since the rider rides the anchor's path.
+- **Logrolling for votes.** Adding another faction's pet rider **buys their
+  votes** — directly spending the Deal-making power and relationship capital
+  (§7.1) to push `dealValue` in the passage math. A well-built coalition bill
+  passes things none of its parts could alone.
+- **The weight penalty.** Every rider shifts the bill's net support by its own
+  popularity. Stuff in too much unpopular pork and the **whole vehicle sags** —
+  opponents campaign on "what's hidden inside," and getting **caught logrolling**
+  costs `integrity` (and can feed `notoriety`). Bigger bills also draw more
+  amendments and scrutiny.
+- **All-or-nothing risk.** One veto kills the entire bundle — *unless* a
+  **line-item veto** (state) lets the governor surgically strike your riders
+  while keeping the anchor. So at the state level, rider-stuffing is a live duel
+  with the executive's scalpel; at the federal level there's no scalpel, making
+  the omnibus a blunt, powerful, take-it-or-leave-it weapon.
+- **Single-subject limits.** Each state carries a data flag for its
+  single-subject/germaneness rule; where it's strict, off-topic riders are
+  **ruled out of order** (a realism lever that varies the omnibus game
+  state-to-state). Federal bodies default permissive.
+
+This turns omnibus play into a genuine strategic mini-game — coalition-building,
+risk-bundling, and a cat-and-mouse with the veto pen — that rewards mastery
+without abstracting away the real civics.
+
 ---
 
 ## 8. Progression — Between Terms & Across Tiers
@@ -579,6 +729,7 @@ the-politician/
 │  │  ├─ world/              # ONE persistent nested world model + record effects
 │  │  ├─ actions/            # campaign actions + effect operators
 │  │  ├─ powers/             # governing powers + effect operators
+│  │  ├─ legislature/        # chambers, committees, pipeline, passage & veto-override math, omnibus
 │  │  ├─ events/             # event pool + resolution (incl. health/mortality)
 │  │  ├─ career/             # lifespan, aging/mortality, progression, eligibility, scoring
 │  │  ├─ dynasty/            # lineage, succession, heir/protégé generation, legacy
@@ -632,11 +783,17 @@ interface Demographic {
   baseTurnout: number;                 // 0 … 1
 }
 
-interface Unit {                        // ward / county / state, per tier
+type PlaceKind =
+  | "ward" | "city" | "county" | "parish" | "borough"   // local naming varies by state
+  | "district" | "state" | "nation";
+
+interface Unit {                        // ward / county / parish / state, per tier
   id: UnitId; name: string; tier: TierId;
-  parentId?: UnitId;                    // nesting: ward→city→state→nation (enables jurisdiction checks)
+  kind: PlaceKind;                      // correct local name (parish in LA, borough in AK, …)
+  parentId?: UnitId;                    // nesting: ward→city→county→state→nation
   seats: number;                        // prize: council seats / electoral votes / etc.
-  partisanLean: number;                 // −1 … +1
+  baselineLean: number;                 // −1 … +1, historically seeded; immutable anchor (§5.5)
+  currentLean: number;                  // −1 … +1, drifts from baseline over time
   mix: Record<DemographicId, number>;   // group shares, sum ≈ 1
 }
 
@@ -677,9 +834,47 @@ interface Proposal {                    // a catalog entry (§7.5); gated like P
   domain: AuthorityDomain;              // subject matter — must be in the mover's office.powers
   reach: "own" | "descendants";
   introduceRights: OfficeId[];          // which seats may sponsor/propose it
-  decisionBody?: OfficeId;              // collective body that votes (if any)
+  bodyId: LegislativeBodyId;            // the body that processes it (chambers/committees)
   passage: PassageRule;
   effects: Effect[];                    // applied on passage, through the shared effect system
+
+  // Omnibus / riders (§7.7) — state & federal only
+  isOmnibus?: boolean;
+  riders?: Proposal[];                  // attached measures bundled onto this vehicle
+  mustPass?: boolean;                   // anchor status (e.g. a budget) that carries riders
+}
+
+type LegislativeBodyId = string; type ChamberId = string; type CommitteeId = string;
+
+interface Committee {
+  id: CommitteeId; name: string;
+  domains: AuthorityDomain[];           // proposals in these domains are referred here
+  chair?: OfficeId;                     // gatekeeper: can schedule / table-to-die / amend
+}
+
+interface Chamber {
+  id: ChamberId; name: string;         // "City Council", "State Senate", "U.S. House"…
+  seats: number;
+  committees: Committee[];
+  defaultThreshold: PassageRule;        // majority unless a proposal demands more
+  cloture?: number;                     // e.g. 60 (federal Senate); enables filibuster
+  rulesGatekeeper?: CommitteeId;        // floor-scheduling control (e.g. House Rules)
+}
+
+interface LegislativeBody {             // city council / state legislature / Congress
+  id: LegislativeBodyId; name: string; tier: TierId;
+  chambers: Chamber[];                  // 1 = unicameral (council, Nebraska); 2 = bicameral
+  reconciliation: "conference" | "none";
+  veto: VetoRule;
+  singleSubjectRule?: boolean;          // limits omnibus/riders (many states); federal = false
+}
+
+interface VetoRule {
+  executive: OfficeId;                  // mayor / governor / president
+  hasVeto: boolean;                     // council-manager cities may be false
+  lineItem: boolean;                    // governors often true; U.S. President false
+  overrideThreshold: PassageRule;       // default supermajority (⌈2/3·N⌉) in all chambers
+  pocketVeto: boolean;
 }
 
 interface Office {
@@ -704,6 +899,8 @@ interface Scenario {                    // a complete playable world
   tiers: TierId[];
   issues: Issue[]; demographics: Demographic[];
   units: Unit[]; offices: Office[];
+  bodies: LegislativeBody[];            // chambers/committees/veto rules per jurisdiction
+  proposals: Proposal[];               // the catalog (§7.5) available in this world
   candidates: Character[];
   world: WorldState;
 }
@@ -727,7 +924,8 @@ refined in resolution over the milestones.
 ### M0 — Engine foundations + data pipeline (headless, testable here)
 - [ ] Scaffold `core` (TS strict, Vitest), seeded RNG.
 - [ ] Data models + national data ingestion: nested US states/cities/districts,
-      real party leans, issue & demographic schema (coarse first pass).
+      **historically-seeded `baselineLean`** per place (state/city/county/parish),
+      issue & demographic schema (coarse first pass).
 - [ ] A focused **playable slice**: one real city wired for full play; the rest
       of the nation present but coarse.
 - [ ] Support + turnout simulation; seat tally.
@@ -746,8 +944,11 @@ refined in resolution over the milestones.
 
 ### M2 — Make the city a full game
 - [ ] Heuristic opponent + governing rivals/factions AI.
+- [ ] **Council legislative pipeline**: committee referral & chair gatekeeping,
+      floor vote (passage math), mayor veto + 2/3 override.
 - [ ] Event/news system + starter pool (campaign + governing events), earnest tone.
-- [ ] City growth/decay dynamics across multiple terms.
+- [ ] City growth/decay + **leaning drift** (`currentLean` vs `baselineLean`,
+      §5.5) across multiple terms.
 - [ ] Balance pass via batch sims; golden-master tests.
 
 ### M3 — Career, mortality & dynasty (single tier)
@@ -767,7 +968,12 @@ refined in resolution over the milestones.
 - [ ] Refine national data to full resolution: state + federal units, offices,
       issues, powers, world models.
 - [ ] **Nested world roll-up**: city ⊂ state ⊂ nation; AI runs all unheld
-      offices; levels influence each other.
+      offices; levels influence each other; leaning drift rolls up tiers.
+- [ ] **Bicameral pipeline**: two chambers + conference reconciliation, Senate
+      **cloture/filibuster (60)**, governor **line-item veto**, override math;
+      Nebraska unicameral special case.
+- [ ] **Omnibus & riders** (§7.7): bundling, logrolling for votes, the weight
+      penalty, single-subject limits per state, line-item-veto duel.
 - [ ] Cross-tier **Progression**: eligibility, seeking higher office, the
       underdog reset, failed-jump consequences, inheriting predecessors' world.
 - [ ] Validate all three single-tier games and the full climb.
