@@ -820,6 +820,60 @@ Whichever branch the player occupies, the others push back; climbing tiers means
 inheriting — and contesting — counterweights you don't control. This is what
 makes the "earnest civics sim" honest rather than a power fantasy.
 
+### 7.11 Impeachment & Removal (the legislature's hardest check)
+
+Beyond overriding vetoes and rejecting nominees, a legislature can **remove**
+officials — the sharpest check, reserved for serious misconduct. The structure
+mirrors reality per tier (all data):
+
+- **Federal / state:** the **lower chamber impeaches** (articles, simple
+  majority) and the **upper chamber tries and convicts** (typically **2/3**).
+  Applies to executives, judges, and officers.
+- **City:** impeachment is rarer; councils may **remove for cause**, and
+  **recall** (§7.12) is the more common municipal removal route.
+
+**Grounds** are misconduct — corruption, malfeasance, "high crimes" — so removal
+risk is driven by **low `integrity`, scandal events, and high `notoriety`**. The
+mechanic cuts both ways:
+
+- **As a target.** An exposed player officeholder faces an impeachment push when
+  the opposition holds the chamber; it plays as a high-stakes **crisis** —
+  whip the trial vote, spend Political Capital and relationships, lean on
+  `composure` — and **conviction ends the character's run** (another career-ender
+  feeding succession, §4). Surviving a trial can even build defiant `notoriety`.
+- **As a weapon.** The player can **initiate** impeachment against a rival
+  officeholder — a real strategy with real blowback if it reads as partisan
+  overreach (integrity/approval cost if it fails).
+
+### 7.12 Direct Democracy — Initiative, Referendum & Recall (the people as a check)
+
+Where the three branches gridlock or overreach, **the voters** are the
+counterweight. Availability varies sharply by jurisdiction (only some states
+have the initiative; recall and referendum rules differ; city charters vary), so
+each carries data flags `hasInitiative / hasReferendum / hasRecall` and a
+`signatureThreshold`.
+
+- **Initiative** — citizens (or the player via a **petition drive**) put a law or
+  measure directly on the ballot, **bypassing a hostile legislature or committee
+  gate** (§7.6). Pipeline: gather signatures → ballot campaign → popular vote. A
+  passed initiative becomes law without legislative consent.
+- **Referendum** — voters **approve or reject** a measure: some referred by the
+  legislature (bonds, constitutional amendments, §7.5), others a **veto
+  referendum** to repeal a law already passed.
+- **Recall** — a citizen petition forces a **special election to remove an
+  officeholder** mid-term, driven by low approval/scandal. The cross-branch
+  removal route (and, like impeachment, a career-ender feeding succession).
+
+These reuse existing systems: the **`ballot_measure`** proposal type (§7.5), the
+**Campaign Mode** loop (a signature drive and ballot campaign *are* campaigns,
+§6), and **approval/reputation** (§4) as the engine of recalls. They make the
+electorate a live fourth force: a player can **route around** a branch that
+blocks them — or be **routed around** when they overreach.
+
+Updating §7.10: the checks-and-balances loop is really **four** forces —
+legislature, executive, judiciary, and **the people** (ballot & recall) — each
+able to check the others at every tier where the jurisdiction's rules allow it.
+
 ---
 
 ## 8. Progression — Between Terms & Across Tiers
@@ -833,8 +887,10 @@ After each term the **Progression** step decides what's next:
   bites: you need enough reputation *of some kind* to be viable.
 - **Stay put for life** — a fully supported path; the game must remain rich
   for a career-long city or state politician.
-- **Retire / age out / lose / die** — the character's run ends; a **post-career
-  summary** scores the life (offices held, world impact, integrity, legacy).
+- **Retire / age out / lose / die / be removed** — the character's run ends; a
+  **post-career summary** scores the life (offices held, world impact, integrity,
+  legacy). Removal via **impeachment-conviction or recall** (§7.11–7.12) is a
+  disgraceful early ending that taints the lineage's `legacy`.
 - **Succession** — the player continues the **lineage** as an heir or protégé
   (§4), inheriting name, partial relationships, and accumulated legacy.
 - **Filling vacant seats** — when any officeholder (player or AI) dies or leaves
@@ -1033,6 +1089,9 @@ interface Proposal {                    // a catalog entry (§7.5); gated like P
   isOmnibus?: boolean;
   riders?: Proposal[];                  // attached measures bundled onto this vehicle
   mustPass?: boolean;                   // anchor status (e.g. a budget) that carries riders
+
+  // Direct-democracy path (§7.12) — for type "ballot_measure"
+  byPetition?: boolean;                 // citizen/player initiative, bypassing the legislature
 }
 
 type LegislativeBodyId = string; type ChamberId = string; type CommitteeId = string;
@@ -1058,6 +1117,21 @@ interface LegislativeBody {             // city council / state legislature / Co
   reconciliation: "conference" | "none";
   veto: VetoRule;
   singleSubjectRule?: boolean;          // limits omnibus/riders (many states); federal = false
+  impeachment?: ImpeachmentRule;        // legislative removal power (§7.11)
+}
+
+interface ImpeachmentRule {             // §7.11
+  impeachChamber: ChamberId;            // brings articles (default: lower, majority)
+  tryChamber: ChamberId;                // tries & convicts
+  convictThreshold: PassageRule;        // typically supermajority (2/3)
+  applies: OfficeId[];                  // executives, judges, officers removable here
+}
+
+interface DirectDemocracyRule {         // §7.12, per jurisdiction (keyed by UnitId)
+  hasInitiative: boolean;               // citizen-proposed law on the ballot
+  hasReferendum: boolean;               // approve/reject or veto-repeal a law
+  hasRecall: boolean;                   // petition → special election to remove an officeholder
+  signatureThreshold: number;           // share of electorate to qualify a petition
 }
 
 interface VetoRule {
@@ -1131,6 +1205,7 @@ interface Scenario {                    // a complete playable world
   units: Unit[]; offices: Office[];
   bodies: LegislativeBody[];            // chambers/committees/veto rules per jurisdiction
   courts: Court[];                      // the judiciary per tier (§7.9)
+  directDemocracy: Record<UnitId, DirectDemocracyRule>; // initiative/referendum/recall per place (§7.12)
   proposals: Proposal[];               // the catalog (§7.5) available in this world
   candidates: Character[];
   world: WorldState;
@@ -1213,7 +1288,10 @@ refined in resolution over the milestones.
       penalty, single-subject limits per state, line-item-veto duel.
 - [ ] **Full executive & judiciary** (§7.8–7.10): Senate confirmations
       (nuclear-option flag), state/federal court hierarchies, judicial review at
-      scale, bench-stacking as a dynasty lever, impeachment/removal.
+      scale, bench-stacking as a dynasty lever.
+- [ ] **Removal & direct democracy** (§7.11–7.12): impeachment/conviction,
+      recall, and initiative/referendum petition→ballot campaigns, per
+      jurisdiction rules — removal as a career-ender feeding succession.
 - [ ] Cross-tier **Progression**: eligibility, seeking higher office, the
       underdog reset, failed-jump consequences, inheriting predecessors' world.
 - [ ] Validate all three single-tier games and the full climb.
