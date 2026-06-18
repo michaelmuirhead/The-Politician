@@ -364,6 +364,49 @@ A strong record + happy constituents → easy re-election and higher name
 recognition (climbing fuel). A disastrous or do-nothing term → primary
 challenges, lost seats, and capped ambition. The two modes are one feedback loop.
 
+### 7.4 Authority & Jurisdiction (gate-keeping)
+
+An "earnest civics sim" is only credible if officials can do **exactly** what
+their seat empowers them to do — no more, no less. A city council member cannot
+embargo a foreign nation; a U.S. Senator cannot set a city's property-tax rate.
+This is enforced as a **hard engine invariant**, not a UI nicety, along two
+independent axes:
+
+**1. Power authority (what kind of action).** Every `Power` is authored at a
+specific `tier` and **authority domain** (e.g. `local.zoning`, `local.tax`,
+`state.budget`, `federal.foreign_policy`). An office grants only the powers that
+real seat holds, so a power a seat lacks **isn't in its list at all**:
+
+| Office | Has power | Lacks power |
+|---|---|---|
+| City Council member | local ordinances, district zoning votes | city-wide budget veto, any state/federal power |
+| Mayor | city budget, appointments, development | state law, foreign policy |
+| Governor | state budget, statewide programs, National Guard | city tax rates, federal legislation |
+| U.S. Representative | federal legislation (vote), district casework | enacting *any* city/state ordinance |
+| President | executive actions, foreign policy, federal appointments | passing laws alone, setting local taxes |
+
+**2. Jurisdiction scope (over which place).** A power affects **only the
+jurisdiction node the office governs** within the nested world — never a sibling
+or unrelated one. The Mayor of City A cannot tax City B; a Governor acts on
+*their* state, not a neighbor's. Federal seats act on their district/state for
+casework and on the nation for national powers.
+
+**Enforcement — the gate.** The pure reducer (§11) validates every governing
+command before applying it; a command is rejected unless **all** hold:
+
+1. the acting character actually **holds** the office (seated, alive, in term);
+2. the invoked power is in that **office's `powers`** list (authority domain);
+3. the command's **target jurisdiction is within the office's authority** (its
+   own node, or a descendant for powers explicitly marked as flowing downward).
+
+Anything else is an **illegal command** and is refused — so neither the player's
+UI, an event choice, nor the AI running other seats can ever exceed its mandate.
+Shared powers (e.g. a legislature where many members vote) are modeled as
+*participation in a collective decision*, not unilateral action: a single
+representative's power is to **cast one vote / sponsor / filibuster**, while the
+bill's passage is resolved at the body's level. This keeps separation of powers
+and federalism honest at every tier.
+
 ---
 
 ## 8. Progression — Between Terms & Across Tiers
@@ -466,6 +509,11 @@ the-politician/
   start, not as an afterthought.
 - **The whole world simulates.** AI runs every unheld office on its own clock;
   the player observes/inherits a country that lives without them.
+- **Authority is gated in the reducer (§7.4).** Every governing command is
+  validated against the actor's seat, its `powers` list, and the target
+  jurisdiction before applying. Illegal commands are refused for player *and* AI
+  alike — separation of powers and federalism are engine invariants, not UI
+  conventions.
 
 **Tech:** TypeScript (strict) · Node + Vite · Vitest (unit + golden-master
 balance snapshots) · CLI first · later React + SVG/Canvas map, deployed free to
@@ -491,16 +539,33 @@ interface Demographic {
 
 interface Unit {                        // ward / county / state, per tier
   id: UnitId; name: string; tier: TierId;
+  parentId?: UnitId;                    // nesting: ward→city→state→nation (enables jurisdiction checks)
   seats: number;                        // prize: council seats / electoral votes / etc.
   partisanLean: number;                 // −1 … +1
   mix: Record<DemographicId, number>;   // group shares, sum ≈ 1
 }
 
+type PowerId = string;
+
+// Hierarchical authority domain, e.g. "local.zoning", "state.budget",
+// "federal.foreign_policy". The prefix must match the office's tier.
+type AuthorityDomain = string;
+
+interface Power {
+  id: PowerId; name: string;
+  tier: TierId;                         // which tier of office may ever hold this
+  domain: AuthorityDomain;              // the mandate this power falls under
+  reach: "own" | "descendants";         // acts on the office's own node, or down the hierarchy
+  collective?: boolean;                 // true = participation in a body's vote, not unilateral
+  effects: Effect[];                    // routed through the shared effect system
+}
+
 interface Office {
   id: OfficeId; name: string; tier: TierId;
+  jurisdictionId: UnitId;               // the node in the nested world this seat governs
   termLength: number;                   // turns/years
   termLimit?: number;
-  powers: PowerId[];                    // what you can do once seated
+  powers: PowerId[];                    // the ONLY powers this seat may invoke (authority gate)
   eligibility: EligibilityRule;         // what it takes to run
   vacancyRule: "appointment" | "special_election" | "succession"; // real US rule
 }
@@ -544,7 +609,11 @@ refined in resolution over the milestones.
 - [ ] A focused **playable slice**: one real city wired for full play; the rest
       of the nation present but coarse.
 - [ ] Support + turnout simulation; seat tally.
-- [ ] Unit tests: monotonicity & determinism.
+- [ ] **Authority gate** in the reducer (§7.4): power-domain + jurisdiction
+      validation on every governing command.
+- [ ] Unit tests: monotonicity, determinism, and **illegal-command refusal**
+      (e.g. a council member attempting a federal/foreign power, or acting on a
+      jurisdiction they don't govern, is rejected).
 
 ### M1 — City vertical slice: campaign + govern (CLI)
 - [ ] Nested state machine: Term → Campaign (weekly) → Govern (quarterly) → end-of-term.
