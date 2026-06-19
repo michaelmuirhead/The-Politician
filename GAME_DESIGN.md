@@ -1054,10 +1054,59 @@ reading the projected state — no separate model to keep in sync.
    promotion across tiers.
 3. **v3 (stretch) — Shallow lookahead** over pruned action sets for sharper play.
 
+Political Intelligence (§10.9) ships alongside: estimates + confidence in v1, the
+**deception slider** and **post-mortem reveal** with v2.
+
 **Difficulty** scales AI **competence, not cheating**: lookahead depth, resource
 efficiency, decision noise/error rate, and aggressiveness — wired to the
 difficulty surface (§14). All AI decisions are unit-/golden-master-testable
 because they are deterministic functions of state.
+
+### 10.9 Political Intelligence — information as a resource
+
+The player does **not** get a readout of AI objective functions. What rivals are
+*really* after is **fog-of-war you pay to lift**, which turns "how much do I
+spend to *see*" into a genuine strategic dilemma alongside ads and ground game.
+
+**Tiers of knowledge:**
+
+| Visibility | What it covers | How you get it |
+|---|---|---|
+| **Public (free)** | Votes, bills introduced, ads, endorsements, public positions, party, rough approval polls — the open record | Always available |
+| **Inferred (tells)** | Ambition & intent leaking through behavior — a fundraising surge, tacking to the center, courting national donors | Read the board; sharper with `Intelligence`/`Media Savvy` |
+| **Earned (bought)** | Confidence-rated estimates of a rival's **goals, threat level, likely next move, hidden scandals, true positions** | **Operatives** (pollster, oppo-research/fixer), **relationships** (allies leak), spent **Political Capital** (§4.2) |
+
+- **Intel is a budget sink.** Information competes with campaigning for operatives
+  and capital — investing in sight means investing less in reach.
+- **The Political Intelligence layer.** A dashboard of rival profiles, each an
+  explicit **best estimate with error bars**, never omniscient; `Intelligence`
+  and `Media Savvy` shrink the error bars.
+- **Fog scales with distance/tier**, dovetailing with focus vs. ambient AI
+  (§10.6): city tier is retail and near-transparent (you know everyone); federal
+  is vast and opaque, so the **intel infrastructure becomes essential as you
+  climb** — a built-in difficulty ramp.
+
+**Deception — an adjustable slider.** Whether AI actively misleads (feints —
+signal one race, run in another; bluffs in negotiation) is a **player-set slider**
+in the difficulty surface (§14), not a fixed rule:
+
+```
+Deception:  Off ──── Rare & tell-able (default) ──── Frequent & aggressive
+            no active     occasional, good intel        misdirection as a
+            misdirection  can sniff it out              core AI tactic
+```
+
+Higher settings add paranoia and replayability; lower settings keep play fair and
+predictable. Even at higher settings, **better intel raises your odds of catching
+a feint** — deception and information stay in tension, never a pure coin-flip.
+
+**Reliable hindsight — the post-mortem.** Foresight is fuzzy, but **after** an
+election or term a **post-mortem recap reveals what rivals were actually doing**
+and why key events broke as they did. This is the explainability principle
+(§10.1) made good: scheming never reads as random bad luck. The reveal is
+**difficulty-gated** — full and pedagogical on easier settings, **partial**
+(still your intel's best guess) on the hardest — so learning players get a clear
+teacher while veterans keep the mystery.
 
 ---
 
@@ -1088,6 +1137,7 @@ the-politician/
 │  │  ├─ dynasty/            # lineage, succession, heir/protégé generation, legacy
 │  │  ├─ persistence/        # save/load of the long-running world & lineage state
 │  │  ├─ ai/                 # objective-function actor (act/react/proact); focus vs ambient fidelity
+│  │  ├─ intel/              # fog-of-war estimates, confidence/error bars, deception, post-mortem
 │  │  ├─ engine.ts           # nested state machine; pure reducer (state, command) → state
 │  │  └─ rng.ts              # seeded RNG for determinism
 │  ├─ cli/                   # terminal harness over core — first playable
@@ -1138,6 +1188,17 @@ interface Operative {                   // hireable staff; cost scales per hire,
   role: "fundraiser" | "pollster" | "field" | "spin_doctor" | "fixer" | "smear";
   baseCost: number;                     // in 🏛️ Political Capital
   effects: Effect[];
+}
+
+type DeceptionLevel = "off" | "rare" | "frequent";  // player-set slider (§10.9, §14)
+
+interface IntelEstimate {               // the player's best guess about a rival (§10.9)
+  subject: string;                      // CharacterId
+  goals: Partial<Record<"survive"|"agenda"|"climb"|"party"|"war"|"ego", number>>;
+  threatLevel: number;                  // 0 … 1
+  likelyNextMove?: string;              // predicted command/intent
+  knownScandals: string[];
+  confidence: number;                   // 0 … 1; raised by Intelligence/MediaSavvy + operatives
 }
 
 interface Endorsement {                 // deliberate, non-random; bought with capital + standing
@@ -1385,6 +1446,8 @@ refined in resolution over the milestones.
 - [ ] Event/news system + starter pool (campaign + governing events), earnest tone.
 - [ ] **Operative/staff + endorsement economy** on Political Capital (§4.2):
       scaling hire costs, experience discount.
+- [ ] **Political Intelligence v1** (§10.9): public record + bought oppo-research
+      estimates with confidence bars (intel as a budget sink).
 - [ ] City growth/decay + **leaning drift** (`currentLean` vs `baselineLean`,
       §5.5) across multiple terms.
 - [ ] Balance pass via batch sims; golden-master tests.
@@ -1444,8 +1507,10 @@ Remaining questions are **implementation-level**, to settle as we build:
   relationships transfer to an heir vs. start fresh.
 - **Stress & health formulas.** The precise curves linking campaign/crisis
   stress and lifestyle choices to mortality risk.
-- **Difficulty surface.** What "no permadeath" and other difficulty toggles
-  expose (AI strength, resource handicaps, mortality on/off).
+- **Difficulty surface.** What the difficulty toggles expose: AI competence
+  (lookahead/efficiency/error), resource handicaps, mortality on/off
+  ("no permadeath"), the **AI deception slider** (off / rare / frequent, §10.9),
+  and **post-mortem reveal depth** (full on easy → partial on hard).
 - **Tuning the smart fast-forward.** Exactly which conditions force a stop, and
   whether the player can set their own interrupt rules.
 
