@@ -1415,18 +1415,19 @@ demographics (public census/electoral sources) into swappable data files,
 refined in resolution over the milestones.
 
 ### M0 — Engine foundations + data pipeline (headless, testable here)
-- [ ] Scaffold `core` (TS strict, Vitest), seeded RNG.
-- [ ] Data models + national data ingestion: nested US states/cities/districts,
+- [x] Scaffold `core` (TS strict, Vitest), seeded RNG.
+- [~] Data models + national data ingestion: nested US states/cities/districts,
       **historically-seeded `baselineLean`** per place (state/city/county/parish),
-      issue & demographic schema (coarse first pass).
-- [ ] A focused **playable slice**: one real city wired for full play; the rest
-      of the nation present but coarse.
-- [ ] Support + turnout simulation; seat tally.
-- [ ] **Authority gate** in the reducer (§7.4): power-domain + jurisdiction
+      issue & demographic schema (coarse first pass). *(models done; one nested
+      city/state/nation slice seeded — full national ingestion still pending.)*
+- [x] A focused **playable slice**: one real city wired for full play (Burlington,
+      VT — ward ⊂ city ⊂ state ⊂ nation); rest of the nation coarse.
+- [x] Support + turnout simulation; seat tally.
+- [x] **Authority gate** in the reducer (§7.4): power-domain + jurisdiction
       validation on every governing command.
-- [ ] Unit tests: monotonicity, determinism, and **illegal-command refusal**
+- [x] Unit tests: monotonicity, determinism, and **illegal-command refusal**
       (e.g. a council member attempting a federal/foreign power, or acting on a
-      jurisdiction they don't govern, is rejected).
+      jurisdiction they don't govern, is rejected). *(17 tests passing.)*
 
 ### M1 — City vertical slice: campaign + govern (CLI)
 - [ ] Nested state machine: Term → Campaign (weekly) → Govern (quarterly) → end-of-term.

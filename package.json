@@ -1,0 +1,15 @@
+{
+  "name": "the-politician",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A turn-based political career & dynasty life-sim in a persistent, real United States.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "license": "UNLICENSED"
+}
