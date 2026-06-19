@@ -34,7 +34,18 @@ milestone roadmap.
 
 ## Status
 
-Design phase. Implementation begins with a pure, headless TypeScript
-simulation core (`packages/core`) driven first by a terminal harness
-(`packages/cli`) — starting with the **city tier as a full vertical slice**
-(campaign + govern) — with state/federal tiers and a web UI to follow.
+**Milestones M0 + M1 are implemented and playable.** A pure, headless TypeScript
+simulation core (`packages/core`) is driven by a terminal harness
+(`packages/cli`): you can create a candidate, win a mayoral race in Burlington,
+VT, then govern a term while the city responds — all on one deterministic
+engine. State/federal tiers, real opponent AI, and a web UI follow.
+
+```bash
+npm install                         # workspaces: core + cli
+npm test --workspace @the-politician/core   # 39 tests: sim, gate, term loop
+npm run build --workspaces
+node packages/cli/dist/index.js --demo       # auto-playthrough
+node packages/cli/dist/index.js              # interactive: create & play
+```
+
+See [`packages/core/README.md`](./packages/core/README.md) for engine details.

@@ -1429,13 +1429,14 @@ refined in resolution over the milestones.
       (e.g. a council member attempting a federal/foreign power, or acting on a
       jurisdiction they don't govern, is rejected). *(17 tests passing.)*
 
-### M1 — City vertical slice: campaign + govern (CLI)
-- [ ] Nested state machine: Term → Campaign (weekly) → Govern (quarterly) → end-of-term.
-- [ ] **Character creation**: 8-stat 1–10 point-buy + background trait (§4.1).
-- [ ] Campaign Mode loop + first actions (Rally, Ads, Fundraiser, Retail, Position).
-- [ ] Govern Mode loop + first powers (Budget, Ordinance, Development).
-- [ ] Living **city** world model + `recordEffect` feedback into the sim.
-- [ ] CLI: win a council/mayor race, then govern a term, in the terminal.
+### M1 — City vertical slice: campaign + govern (CLI) ✓
+- [x] Nested state machine: Term → Campaign (weekly) → Govern (quarterly) → end-of-term.
+- [x] **Character creation**: 8-stat 1–10 point-buy + background trait (§4.1).
+- [x] Campaign Mode loop + first actions (Rally, Ads, Fundraiser, Retail, Position, Attack).
+- [x] Govern Mode loop + first powers (Budget, Zoning, Tax).
+- [x] Living **city** world model + `recordEffect` feedback into the sim.
+- [x] CLI: win a mayoral race, then govern a term, in the terminal
+      (`politician --demo` for an auto-playthrough). *(39 core tests passing.)*
 
 ### M2 — Make the city a full game
 - [ ] Heuristic opponent + governing rivals/factions AI.

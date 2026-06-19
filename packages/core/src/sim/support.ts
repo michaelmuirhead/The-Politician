@@ -4,33 +4,40 @@
  * For each unit, support sums over demographic groups (group share × affinity).
  * Identical at every tier; only the data (units, issues, demographics) changes.
  *
- * For M0 the record and campaign-pressure terms are zero (no govern record or
- * campaign yet); they slot into `affinity` later without changing the shape.
+ *   affinity = w_issues·issueScore + w_identity·identityFit + w_lean·leanFit
+ *            + w_campaign·campaignPressure   // CAMPAIGN: decaying ad/rally effects
+ *            + w_record·recordEffect          // GOVERN: your track record
+ *            + noise
  */
-import type {
-  Candidate,
-  Demographic,
-  Party,
-  Unit,
-} from "../models/types.js";
+import type { Candidate, Demographic, Party, Unit } from "../models/types.js";
 import type { Rng } from "../rng.js";
 
-/** Affinity term weights (sum to 1). */
+/** Affinity term weights. The first three form the [0,1] baseline (sum ≈ 1); */
+/** campaign and record are additive modifiers. */
 export interface AffinityWeights {
   issues: number;
   identity: number;
   lean: number;
+  campaign: number;
+  record: number;
 }
 
 export const DEFAULT_WEIGHTS: AffinityWeights = {
   issues: 0.5,
   identity: 0.2,
   lean: 0.3,
+  campaign: 0.3,
+  record: 0.35,
 };
 
-export interface SupportConfig {
+export interface AffinityContext {
   weights?: AffinityWeights;
-  /** Symmetric noise amplitude applied to affinity (0 = fully deterministic). */
+  /** Accumulated campaign pressure for this candidate in this unit (≥ 0). */
+  pressure?: number;
+  /** Govern record effect for this candidate, −1 … +1. */
+  record?: number;
+  rng?: Rng;
+  /** Symmetric noise amplitude (0 = fully deterministic). */
   noise?: number;
 }
 
@@ -49,7 +56,6 @@ export function issueScore(group: Demographic, candidate: Candidate): number {
     score += salience * (1 - Math.abs(pos - ideal) / 2);
     totalSalience += salience;
   }
-  // Normalize by total salience so weighting is stable even if it doesn't sum to 1.
   return totalSalience > 0 ? clamp01(score / totalSalience) : 0;
 }
 
@@ -63,20 +69,32 @@ export function leanFit(party: Party, unit: Unit): number {
   return clamp01(1 - Math.abs(party.lean - unit.currentLean) / 2);
 }
 
-/** Overall affinity of a group (in a unit) for a candidate, 0 … 1. */
+/** Saturating transform so stacked campaign pressure has diminishing returns. */
+export function pressureTerm(pressure: number): number {
+  return pressure > 0 ? pressure / (pressure + 1) : 0;
+}
+
+/**
+ * Overall affinity of a group (in a unit) for a candidate — a non-negative
+ * relative score (≥ 0) feeding the vote-share denominator. The baseline
+ * (issues+identity+lean) lives in [0,1]; campaign and record are additive
+ * modifiers and may push the score above 1, so investing in a campaign always
+ * advantages the investor rather than compressing the field against a [0,1] cap.
+ */
 export function affinity(
   group: Demographic,
   candidate: Candidate,
   party: Party,
   unit: Unit,
-  weights: AffinityWeights = DEFAULT_WEIGHTS,
-  rng?: Rng,
-  noise = 0,
+  ctx: AffinityContext = {},
 ): number {
+  const w = ctx.weights ?? DEFAULT_WEIGHTS;
   const base =
-    weights.issues * issueScore(group, candidate) +
-    weights.identity * identityFit(candidate) +
-    weights.lean * leanFit(party, unit);
-  const jitter = rng && noise > 0 ? rng.noise(noise) : 0;
-  return clamp01(base + jitter);
+    w.issues * issueScore(group, candidate) +
+    w.identity * identityFit(candidate) +
+    w.lean * leanFit(party, unit);
+  const campaign = w.campaign * pressureTerm(ctx.pressure ?? 0);
+  const record = w.record * (ctx.record ?? 0);
+  const jitter = ctx.rng && ctx.noise ? ctx.rng.noise(ctx.noise) : 0;
+  return Math.max(0, base + campaign + record + jitter);
 }
