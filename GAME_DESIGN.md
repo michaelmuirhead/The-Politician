@@ -1438,20 +1438,23 @@ refined in resolution over the milestones.
 - [x] CLI: win a mayoral race, then govern a term, in the terminal
       (`politician --demo` for an auto-playthrough). *(39 core tests passing.)*
 
-### M2 — Make the city a full game
-- [ ] Heuristic opponent + governing rivals/factions AI.
+### M2 — Make the city a full game (in progress)
+- [x] **Heuristic opponent AI** (§10): trait-weighted objective function, greedy
+      action selection via one-step sim lookahead; beats idle play, drives all
+      CLI opponents.
+- [x] Event/news system + starter pool (campaign + governing events), earnest tone.
+- [x] City growth/decay + **leaning drift** (`currentLean` vs `baselineLean`,
+      §5.5) across multiple terms; record-based re-election advantage.
+- [x] Golden-master / determinism regression test for the AI race.
 - [ ] **Council legislative pipeline**: committee referral & chair gatekeeping,
-      floor vote (passage math), mayor veto + 2/3 override.
+      floor vote (passage math), mayor veto + 2/3 override. *(deferred → M2b)*
 - [ ] **Executive & courts (city)**: mayoral appointments, executive directives
-      with limits, and a municipal court that can strike preempted ordinances
-      (§7.8–7.9) — the city's checks-and-balances loop.
-- [ ] Event/news system + starter pool (campaign + governing events), earnest tone.
-- [ ] **Operative/staff + endorsement economy** on Political Capital (§4.2):
-      scaling hire costs, experience discount.
-- [ ] **Political Intelligence v1** (§10.9): public record + bought oppo-research
-      estimates with confidence bars (intel as a budget sink).
-- [ ] City growth/decay + **leaning drift** (`currentLean` vs `baselineLean`,
-      §5.5) across multiple terms.
+      with limits, municipal court striking preempted ordinances (§7.8–7.9).
+      *(deferred → M2b)*
+- [ ] **Operative/staff + endorsement economy** on Political Capital (§4.2).
+      *(deferred → M2b)*
+- [ ] **Political Intelligence v1** (§10.9): bought oppo-research estimates with
+      confidence bars. *(deferred → M2b)*
 - [ ] Balance pass via batch sims; golden-master tests.
 
 ### M3 — Career, mortality & dynasty (single tier)

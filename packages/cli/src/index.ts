@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * The Politician — terminal harness over @the-politician/core (M1).
+ * The Politician — terminal harness over @the-politician/core (M1 + M2).
  *
- *   politician --demo            deterministic auto-playthrough (campaign + govern)
- *   politician                   interactive: create a character and play a term
+ *   politician --demo            deterministic auto-playthrough (two terms)
+ *   politician                   interactive: create a character and play
  *
- * Thin over the engine: all game logic lives in core; this only renders and
- * gathers input.
+ * Opponents now run on the real heuristic AI (§10); events fire each turn; and
+ * leanings drift between terms (§5.5). All game logic lives in core.
  */
 import * as readline from "node:readline/promises";
 import { stdin, stdout, argv } from "node:process";
@@ -22,123 +22,153 @@ import {
   termEnactPower,
   advanceQuarter,
   overallRecord,
+  aiCampaignWeek,
+  drawGovernEvent,
+  drawCampaignEvent,
+  autoChoice,
+  applyWorldEffect,
+  applyResourceEffect,
+  driftAfterTerm,
+  makeRng,
+  hashSeed,
   type Scenario,
   type Candidate,
   type TermState,
   type CampaignAction,
   type PowerArgs,
+  type EventEffect,
 } from "@the-politician/core";
 import { renderWorld, renderElection, renderPressure, nameOf, hr } from "./render.js";
 
 const WARDS = ["ward1", "ward2", "ward3", "ward4", "ward5"];
 const OPPONENTS = ["bob", "carol"];
+const CITY = "burlington";
 
-/** Clone the scenario and inject the player as a candidate. */
 function scenarioWith(player: Candidate): Scenario {
   const s = JSON.parse(JSON.stringify(burlingtonScenario)) as Scenario;
   s.candidates.push(player);
   return s;
 }
 
-/**
- * A placeholder opponent (real opponent AI is M2, §10): a light touch — one
- * retail stop per week in a rotating ward — so a diligent, full-city ground
- * game by the protagonist is rewarded.
- */
-function opponentWeek(state: TermState, candId: string): TermState {
-  const res = state.campaign.resources[candId];
-  if (!res || res.ap < 2) return state;
-  const action: CampaignAction = { kind: "retail", unitId: WARDS[state.campaign.week % WARDS.length]! };
-  const out = termCampaignAction(state, candId, action);
-  return out.note.startsWith("refused") ? state : out.state;
+/** Run one AI opponent's full week on the term's campaign. */
+function aiOpponent(state: TermState, candId: string): TermState {
+  return { ...state, campaign: aiCampaignWeek(state.scenario, state.campaign, candId).campaign };
 }
 
-function summarize(state: TermState): string {
-  const groups = burlingtonScenario.demographics;
-  const record = state.world ? overallRecord(groups, state.world) : 0;
-  const approval = Math.round((record + 1) * 50);
-  return [
-    hr,
-    `Final approval: ${approval}%   (record ${record.toFixed(2)})`,
-    state.world ? renderWorld(state.world) : "",
-    hr,
-  ].join("\n");
+/** Apply a campaign event's effects to the player (resources + spread pressure). */
+function applyCampaignEvent(state: TermState, effect: EventEffect): TermState {
+  const res = applyResourceEffect(state.campaign.resources["player"]!, effect);
+  const pressure = { ...state.campaign.pressure };
+  if (effect.pressureSelf) {
+    const map = { ...(pressure["player"] ?? {}) };
+    for (const u of state.units) map[u] = Math.max(0, (map[u] ?? 0) + effect.pressureSelf);
+    pressure["player"] = map;
+  }
+  return {
+    ...state,
+    campaign: { ...state.campaign, resources: { ...state.campaign.resources, player: res }, pressure },
+  };
+}
+
+function approvalLine(state: TermState): string {
+  const record = state.world ? overallRecord(burlingtonScenario.demographics, state.world) : 0;
+  return `approval ${Math.round((record + 1) * 50)}% (record ${record.toFixed(2)})`;
 }
 
 // ─────────────────────────────────────────── demo mode ───────────────────────
 
 function runDemo(seed: string): void {
+  // The protagonist is a broadly-appealing Democrat facing AI rivals on both
+  // flanks (a progressive and a Republican) — a clean showcase of the loop.
+  const demoOpponents = ["alice", "carol"];
   const player = createCharacter({
     id: "player",
     name: "Dana Cole",
-    party: "prog",
-    stats: { charisma: 8, intelligence: 5, stamina: 6, fundraising: 4, composure: 5, integrity: 5, mediaSavvy: 4, negotiation: 3 },
+    party: "dem",
+    stats: { charisma: 8, intelligence: 5, stamina: 7, fundraising: 4, composure: 5, integrity: 5, mediaSavvy: 3, negotiation: 3 },
     traitId: "reformer",
-    positions: { housing: -0.7, taxes: -0.4, policing: -0.5, climate: -0.8 },
+    positions: { housing: -0.35, taxes: -0.15, policing: -0.15, climate: -0.4 },
   });
-  const scenario = scenarioWith(player);
+  let scenario = scenarioWith(player);
+  let record: Record<string, number> = {};
 
-  let s = startTerm(scenario, {
-    officeId: "mayor_burlington",
-    candidateIds: ["player", ...OPPONENTS],
-    weeksTotal: 8,
-    quartersTotal: 8,
-    seed,
-  });
+  console.log(`\n🏛️  THE POLITICIAN — demo (seed: ${seed})`);
+  console.log(`${hr}\nDana Cole (Reformer, Democrat) seeks the mayoralty of Burlington.\n${hr}`);
 
-  console.log(`\n🏛️  THE POLITICIAN — demo playthrough (seed: ${seed})`);
-  console.log(`${hr}\nCandidate: ${player.name} (Reformer, Progressive) for ${s.office.name}\n${hr}`);
+  for (let term = 1; term <= 2; term++) {
+    console.log(`\n${"═".repeat(56)}\n  TERM ${term}\n${"═".repeat(56)}`);
+    let s = startTerm(scenario, {
+      officeId: "mayor_burlington",
+      candidateIds: ["player", ...demoOpponents],
+      weeksTotal: 8,
+      quartersTotal: 6,
+      seed: `${seed}-t${term}`,
+      record,
+    });
+    if (term === 2) console.log("Running for re-election on the record.");
 
-  // Campaign: player runs a strong ground game across every ward; opponents respond.
-  let wardCursor = 0;
-  for (let w = 0; w < s.campaign.weeksTotal; w++) {
-    let guard = 12;
-    while (guard-- > 0) {
-      const res = s.campaign.resources["player"]!;
-      if (res.ap < 2) break;
-      const action: CampaignAction =
-        res.money < 6 ? { kind: "fundraiser" } : { kind: "retail", unitId: WARDS[wardCursor++ % WARDS.length]! };
-      const out = termCampaignAction(s, "player", action);
-      if (out.note.startsWith("refused")) break;
-      s = out.state;
+    // Campaign: every candidate (player included) runs the heuristic AI.
+    for (let w = 0; w < s.campaign.weeksTotal; w++) {
+      for (const cand of ["player", ...demoOpponents]) s = aiOpponent(s, cand);
+
+      const ev = drawCampaignEvent(makeRng(hashSeed(`${seed}-t${term}-w${w}`)));
+      if (ev) {
+        const choice = autoChoice(ev);
+        s = applyCampaignEvent(s, choice.effect);
+        console.log(`  📰 Week ${w + 1}: ${ev.narrative} → ${choice.label}`);
+      }
+      s = termEndWeek(s);
     }
-    for (const opp of OPPONENTS) s = opponentWeek(s, opp);
-    s = termEndWeek(s);
+
+    s = resolveElection(s);
+    console.log(`\n${hr}\nELECTION — TERM ${term}\n${hr}`);
+    console.log(renderElection(scenario, s.lastElection!));
+    console.log(`→ ${nameOf(scenario, s.winnerId!)} wins.`);
+
+    if (s.winnerId !== "player") {
+      console.log("\nDana loses this race — the dynasty waits for another opening.\n");
+      return;
+    }
+
+    // Govern: invest in services/housing; events strike each quarter.
+    console.log(`\n${hr}\nGOVERNING — TERM ${term}\n${hr}`);
+    const services = ["safety", "housing", "infrastructure"] as const;
+    let q = 0;
+    while (s.phase === "govern") {
+      const enact = (powerId: string, args?: PowerArgs) =>
+        termEnactPower(
+          s,
+          { kind: "enactPower", actorId: "player", officeId: "mayor_burlington", powerId, targetJurisdictionId: CITY },
+          args ?? {},
+        );
+      s = enact("city_budget", { service: services[q % services.length]! }).state;
+      if (q % 2 === 0) s = enact("zoning_reform").state;
+
+      const ev = drawGovernEvent(makeRng(hashSeed(`${seed}-t${term}-q${q}`)), 0.6);
+      if (ev && s.world) {
+        const choice = autoChoice(ev);
+        s = { ...s, world: applyWorldEffect(s.world, choice.effect) };
+        console.log(`  📰 Q${q + 1}: ${ev.narrative} → ${choice.label}`);
+      }
+      s = advanceQuarter(s);
+      q++;
+    }
+    console.log(`  End of term ${term}: ${approvalLine(s)}`);
+    if (s.world) console.log(renderWorld(s.world));
+
+    // Between terms: record carries forward and leanings drift (§5.5).
+    const rec = s.world ? overallRecord(burlingtonScenario.demographics, s.world) : 0;
+    record = { player: rec };
+    const ward4Before = scenario.units.find((u) => u.id === "ward4")!.currentLean;
+    scenario = driftAfterTerm(scenario, CITY, rec, scenario.parties.find((p) => p.id === "dem")!);
+    const ward4After = scenario.units.find((u) => u.id === "ward4")!.currentLean;
+    console.log(
+      `  ↪ Leaning drift: Ward 4 ${ward4Before.toFixed(3)} → ${ward4After.toFixed(3)} ` +
+        `(${ward4After < ward4Before ? "more progressive" : "less progressive"} after a ${rec >= 0 ? "strong" : "weak"} term)`,
+    );
   }
 
-  console.log(`\nCampaign complete after ${s.campaign.week} weeks. Player's pressure:`);
-  console.log(renderPressure(s, "player"));
-
-  s = resolveElection(s);
-  console.log(`\n${hr}\nELECTION RESULTS\n${hr}`);
-  console.log(renderElection(scenario, s.lastElection!));
-  console.log(`\n→ ${nameOf(scenario, s.winnerId!)} wins ${s.office.name}.`);
-
-  if (s.winnerId !== "player") {
-    console.log("\nThe player lost this race. Career continues elsewhere another day.");
-    return;
-  }
-
-  // Govern: invest in services and housing each quarter.
-  console.log(`\n${hr}\nGOVERNING (${s.quartersTotal} quarters)\n${hr}`);
-  const services = ["safety", "housing", "infrastructure"] as const;
-  let q = 0;
-  while (s.phase === "govern") {
-    const svc = services[q % services.length]!;
-    const fund = (powerId: string, args?: PowerArgs) =>
-      termEnactPower(
-        s,
-        { kind: "enactPower", actorId: "player", officeId: "mayor_burlington", powerId, targetJurisdictionId: "burlington" },
-        args ?? {},
-      );
-    s = fund("city_budget", { service: svc }).state;
-    if (q % 2 === 0) s = fund("zoning_reform").state;
-    s = advanceQuarter(s);
-    q++;
-  }
-
-  console.log(summarize(s));
-  console.log("Term complete. (M1: re-election & climbing arrive in later milestones.)\n");
+  console.log(`\n${hr}\nTwo terms served. (M2: AI opponents · events · leaning drift.)\n${hr}\n`);
 }
 
 // ────────────────────────────────────── interactive mode ─────────────────────
@@ -155,8 +185,7 @@ async function runInteractive(seed: string): Promise<void> {
   const party = await ask("Party (prog/dem/rep/ind)", "dem");
   console.log("\nBackground traits:");
   BACKGROUND_TRAITS.forEach((t, i) => console.log(`  ${i + 1}. ${t.name} — ${t.description}`));
-  const traitIdx = Number(await ask("Choose a trait #", "6")) - 1;
-  const trait = BACKGROUND_TRAITS[traitIdx] ?? BACKGROUND_TRAITS[5]!;
+  const trait = BACKGROUND_TRAITS[Number(await ask("Choose a trait #", "6")) - 1] ?? BACKGROUND_TRAITS[5]!;
 
   const player = createCharacter({
     id: "player",
@@ -172,19 +201,17 @@ async function runInteractive(seed: string): Promise<void> {
     officeId: "mayor_burlington",
     candidateIds: ["player", ...OPPONENTS],
     weeksTotal: 6,
-    quartersTotal: 8,
+    quartersTotal: 6,
     seed,
   });
-  console.log(`\nRunning for ${s.office.name} as ${player.name} (${trait.name}).`);
+  console.log(`\nRunning for ${s.office.name} as ${player.name} (${trait.name}). Opponents run the AI.`);
 
-  // Campaign weeks.
   while (s.phase === "campaign" && s.campaign.week < s.campaign.weeksTotal) {
     console.log(`\n${hr}\nWeek ${s.campaign.week + 1}/${s.campaign.weeksTotal}`);
-    let acting = true;
-    while (acting) {
+    for (;;) {
       const res = s.campaign.resources["player"]!;
       console.log(`  AP ${res.ap} · $${res.money} · 🏛️${res.capital}`);
-      console.log("  Actions: [1] Rally  [2] Ads  [3] Retail  [4] Fundraiser  [5] Attack  [6] End week");
+      console.log("  [1] Rally [2] Ads [3] Retail [4] Fundraiser [5] Attack [6] End week");
       const choice = await ask("  Choose", "6");
       if (choice === "6") break;
       let action: CampaignAction | undefined;
@@ -200,54 +227,61 @@ async function runInteractive(seed: string): Promise<void> {
       const out = termCampaignAction(s, "player", action);
       console.log(`  → ${out.note}`);
       s = out.state;
-      if (s.campaign.resources["player"]!.ap < 2) acting = false;
+      if (s.campaign.resources["player"]!.ap < 2) break;
     }
-    for (const opp of OPPONENTS) s = opponentWeek(s, opp);
+    for (const opp of OPPONENTS) s = aiOpponent(s, opp);
+    const ev = drawCampaignEvent(makeRng(hashSeed(`${seed}-w${s.campaign.week}`)));
+    if (ev) {
+      const c = autoChoice(ev);
+      s = applyCampaignEvent(s, c.effect);
+      console.log(`  📰 ${ev.narrative} → ${c.label}`);
+    }
     s = termEndWeek(s);
   }
 
   s = resolveElection(s);
   console.log(`\n${hr}\nELECTION RESULTS\n${hr}`);
   console.log(renderElection(scenario, s.lastElection!));
-  console.log(`\n→ ${nameOf(scenario, s.winnerId!)} wins ${s.office.name}.`);
+  console.log(`→ ${nameOf(scenario, s.winnerId!)} wins ${s.office.name}.`);
   if (s.winnerId !== "player") {
     console.log("\nYou lost. Better luck next cycle.\n");
     rl.close();
     return;
   }
 
-  // Govern quarters.
   while (s.phase === "govern") {
     console.log(`\n${hr}\nQuarter ${s.quarter + 1}/${s.quartersTotal}`);
     if (s.world) console.log(renderWorld(s.world));
-    console.log("  Powers: [1] Set tax  [2] Zoning reform  [3] Fund service  [4] Next quarter");
+    const ev = drawGovernEvent(makeRng(hashSeed(`${seed}-q${s.quarter}`)), 0.5);
+    if (ev && s.world) {
+      console.log(`  📰 ${ev.narrative}`);
+      ev.choices.forEach((c, i) => console.log(`     [${i + 1}] ${c.label}`));
+      const pick = ev.choices[Number(await ask("  Response", "1")) - 1] ?? ev.choices[0]!;
+      s = { ...s, world: applyWorldEffect(s.world, pick.effect) };
+    }
+    console.log("  Powers: [1] Set tax [2] Zoning [3] Fund service [4] Next quarter");
     const choice = await ask("  Choose", "4");
     const enact = (powerId: string, args?: PowerArgs) =>
       termEnactPower(
         s,
-        { kind: "enactPower", actorId: "player", officeId: "mayor_burlington", powerId, targetJurisdictionId: "burlington" },
+        { kind: "enactPower", actorId: "player", officeId: "mayor_burlington", powerId, targetJurisdictionId: CITY },
         args ?? {},
       );
     if (choice === "1") {
       const rate = Number(await ask("  Tax rate 0-100", "40")) / 100;
-      const out = enact("set_property_tax", { taxRate: rate });
-      console.log(`  → ${out.note}`);
-      s = out.state;
+      s = enact("set_property_tax", { taxRate: rate }).state;
     } else if (choice === "2") {
-      const out = enact("zoning_reform");
-      console.log(`  → ${out.note}`);
-      s = out.state;
+      s = enact("zoning_reform").state;
     } else if (choice === "3") {
       const svc = (await ask("  Service (safety/housing/infrastructure)", "safety")) as PowerArgs["service"];
-      const out = enact("city_budget", { service: svc });
-      console.log(`  → ${out.note}`);
-      s = out.state;
+      s = enact("city_budget", { service: svc }).state;
     } else {
       s = advanceQuarter(s);
     }
   }
 
-  console.log(summarize(s));
+  console.log(`\n${hr}\nTerm complete: ${approvalLine(s)}`);
+  if (s.world) console.log(renderWorld(s.world));
   rl.close();
 }
 

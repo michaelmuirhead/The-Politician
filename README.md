@@ -34,18 +34,20 @@ milestone roadmap.
 
 ## Status
 
-**Milestones M0 + M1 are implemented and playable.** A pure, headless TypeScript
+**Milestones M0 + M1 are complete; M2 is underway.** A pure, headless TypeScript
 simulation core (`packages/core`) is driven by a terminal harness
-(`packages/cli`): you can create a candidate, win a mayoral race in Burlington,
-VT, then govern a term while the city responds — all on one deterministic
-engine. State/federal tiers, real opponent AI, and a web UI follow.
+(`packages/cli`): create a candidate, out-campaign **heuristic-AI opponents** to
+win a mayoral race in Burlington, VT, then govern multiple terms while the city
+responds, **news events** strike, and **political leanings drift** with your
+record. All on one deterministic engine. The city's legislature/courts,
+state/federal tiers, and a web UI follow.
 
 ```bash
 npm install                         # workspaces: core + cli
-npm test --workspace @the-politician/core   # 39 tests: sim, gate, term loop
+npm test --workspace @the-politician/core   # 56 tests: sim, gate, term, AI, events, drift, golden
 npm run build --workspaces
-node packages/cli/dist/index.js --demo       # auto-playthrough
-node packages/cli/dist/index.js              # interactive: create & play
+node packages/cli/dist/index.js --demo       # deterministic two-term auto-playthrough
+node packages/cli/dist/index.js              # interactive: create & play vs the AI
 ```
 
 See [`packages/core/README.md`](./packages/core/README.md) for engine details.

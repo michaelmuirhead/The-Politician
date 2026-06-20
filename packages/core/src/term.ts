@@ -41,6 +41,8 @@ export interface TermState {
   quartersTotal: number;
   log: string[];
   seed: number | string;
+  /** Incumbent record by candidate id, applied at the election. */
+  record: Record<CharacterId, number>;
 }
 
 /** Wards governed by / contested for an office (descendants of its jurisdiction). */
@@ -63,6 +65,8 @@ export interface StartTermOptions {
   weeksTotal?: number;
   quartersTotal?: number;
   seed?: number | string;
+  /** Incumbent record by candidate id, folded into the election (re-election). */
+  record?: Record<CharacterId, number>;
 }
 
 export function startTerm(scenario: Scenario, opts: StartTermOptions): TermState {
@@ -84,6 +88,7 @@ export function startTerm(scenario: Scenario, opts: StartTermOptions): TermState
     quartersTotal: opts.quartersTotal ?? 16,
     log: [`Campaign for ${office.name} begins (${candidates.length} candidates).`],
     seed: opts.seed ?? 1,
+    record: opts.record ?? {},
   };
 }
 
@@ -113,6 +118,7 @@ export function resolveElection(state: TermState): TermState {
     seed: state.seed,
     units,
     pressureByUnit: pressureByUnit(state.campaign),
+    record: state.record,
   });
   const winnerId = Object.entries(result.votesByCandidate).reduce(
     (best, [id, v]) => (v > (result.votesByCandidate[best] ?? -1) ? id : best),
